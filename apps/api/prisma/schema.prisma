@@ -37,33 +37,36 @@ enum CommandStatus {
 }
 
 model Station {
-  id                    String        @id @default(cuid())
-  name                  String
-  slug                  String        @unique
-  location              String?
-  description           String?
-  ipAddress             String?
-  agentVersion          String?
-  status                StationStatus @default(OFFLINE)
-  serviceStatus         ServiceStatus @default(UNKNOWN)
-  lastHeartbeatAt       DateTime?
-  lastDataReceivedAt    DateTime?
-  lastCpuPercent        Float?
-  lastMemoryPercent     Float?
-  lastDiskPercent       Float?
+  id                     String        @id @default(cuid())
+  name                   String
+  slug                   String        @unique
+  location               String?
+  description            String?
+  latitude               Float?
+  longitude              Float?
+  ipAddress              String?
+  agentVersion           String?
+  status                 StationStatus @default(OFFLINE)
+  serviceStatus          ServiceStatus @default(UNKNOWN)
+  lastHeartbeatAt        DateTime?
+  lastDataReceivedAt     DateTime?
+  lastCpuPercent         Float?
+  lastMemoryPercent      Float?
+  lastDiskPercent        Float?
   lastTemperatureCelsius Float?
-  uptimeSeconds         Int?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+  uptimeSeconds          Int?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
 
-  heartbeats            Heartbeat[]
-  metrics               Metric[]
-  events                Event[]
-  logs                  StationLog[]
-  commands              Command[]
+  heartbeats             Heartbeat[]
+  metrics                Metric[]
+  events                 Event[]
+  logs                   StationLog[]
+  commands               Command[]
 
   @@index([status])
   @@index([lastHeartbeatAt])
+  @@index([latitude, longitude])
 }
 
 model Heartbeat {
