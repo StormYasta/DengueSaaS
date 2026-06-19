@@ -1,0 +1,25 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+.env.*
+Dockerfile
+.dockerignore
+
+# build outputs
+dist
+build
+coverage
+.vite
+
+# python
+__pycache__
+.venv
+venv
+*.pyc
+
+# editor
+.vscode
+.idea
+.DS_Store
