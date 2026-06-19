@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:demo": "cross-env DEMO_MODE=true tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
@@ -18,6 +19,7 @@
   "dependencies": {
     "@fastify/cors": "^10.0.0",
     "@prisma/client": "6.19.3",
+    "cross-env": "^7.0.3",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",
     "zod": "^3.24.1"
