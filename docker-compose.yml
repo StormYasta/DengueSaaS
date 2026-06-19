@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dengue-saas-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dengue
+      POSTGRES_PASSWORD: dengue
+      POSTGRES_DB: dengue_saas
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dengue -d dengue_saas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

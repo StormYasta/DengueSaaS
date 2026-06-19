@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StationStatus {
+  ONLINE
+  OFFLINE
+  WARNING
+}
+
+enum ServiceStatus {
+  RUNNING
+  STOPPED
+  FAILED
+  UNKNOWN
+}
+
+enum EventSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum CommandStatus {
+  PENDING
+  SENT
+  RUNNING
+  SUCCESS
+  FAILED
+  EXPIRED
+}
+
+model Station {
+  id                    String        @id @default(cuid())
+  name                  String
+  slug                  String        @unique
+  location              String?
+  description           String?
+  ipAddress             String?
+  agentVersion          String?
+  status                StationStatus @default(OFFLINE)
+  serviceStatus         ServiceStatus @default(UNKNOWN)
+  lastHeartbeatAt       DateTime?
+  lastDataReceivedAt    DateTime?
+  lastCpuPercent        Float?
+  lastMemoryPercent     Float?
+  lastDiskPercent       Float?
+  lastTemperatureCelsius Float?
+  uptimeSeconds         Int?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  heartbeats            Heartbeat[]
+  metrics               Metric[]
+  events                Event[]
+  logs                  StationLog[]
+  commands              Command[]
+
+  @@index([status])
+  @@index([lastHeartbeatAt])
+}
+
+model Heartbeat {
+  id                    String        @id @default(cuid())
+  stationId             String
+  station               Station       @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  receivedAt            DateTime      @default(now())
+  ipAddress             String?
+  agentVersion          String?
+  serviceStatus         ServiceStatus @default(UNKNOWN)
+  cpuPercent            Float
+  memoryPercent         Float
+  diskPercent           Float
+  temperatureCelsius    Float?
+  uptimeSeconds         Int?
+  lastCollectionAt      DateTime?
+  recordsLast24h        Int           @default(0)
+
+  @@index([stationId, receivedAt])
+}
+
+model Metric {
+  id                    String        @id @default(cuid())
+  stationId             String
+  station               Station       @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  collectedAt           DateTime      @default(now())
+  cpuPercent            Float
+  memoryPercent         Float
+  diskPercent           Float
+  temperatureCelsius    Float?
+  uptimeSeconds         Int?
+
+  @@index([stationId, collectedAt])
+}
+
+model Event {
+  id          String        @id @default(cuid())
+  stationId   String?
+  station     Station?      @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  severity    EventSeverity @default(INFO)
+  type        String
+  message     String
+  metadata    Json?
+  createdAt   DateTime      @default(now())
+
+  @@index([stationId, createdAt])
+  @@index([severity])
+}
+
+model StationLog {
+  id          String   @id @default(cuid())
+  stationId   String
+  station     Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  level       String   @default("INFO")
+  message     String
+  source      String?
+  occurredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([stationId, occurredAt])
+}
+
+model Command {
+  id          String        @id @default(cuid())
+  stationId   String
+  station     Station       @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  type        String
+  payload     Json?
+  status      CommandStatus @default(PENDING)
+  requestedBy String?
+  requestedAt DateTime      @default(now())
+  sentAt      DateTime?
+  finishedAt  DateTime?
+  result      String?
+
+  @@index([stationId, status])
+}

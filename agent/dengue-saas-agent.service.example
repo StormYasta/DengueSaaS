@@ -1,0 +1,16 @@
+[Unit]
+Description=DengueSaaS Station Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/dengue-saas/agent
+EnvironmentFile=/opt/dengue-saas/agent/.env
+ExecStart=/opt/dengue-saas/agent/.venv/bin/python /opt/dengue-saas/agent/station_agent.py
+Restart=always
+RestartSec=10
+User=pi
+
+[Install]
+WantedBy=multi-user.target
