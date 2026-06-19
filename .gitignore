@@ -1,0 +1,22 @@
+node_modules
+.env
+.env.local
+.env.*.local
+dist
+build
+.vite
+coverage
+.DS_Store
+
+# Python
+__pycache__
+*.py[cod]
+.venv
+venv
+
+# Prisma
+apps/api/prisma/dev.db
+
+# IDE
+.vscode
+.idea
