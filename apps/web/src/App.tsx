@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, Moon, Search, Sun } from 'lucide-react';
 import { MetricsChart } from './components/MetricsChart';
+import { OperationMap } from './components/OperationMap';
 import { StatCard } from './components/StatCard';
 import { StationTable } from './components/StationTable';
 import { api, DashboardResponse, StationDetail } from './services/api';
@@ -74,6 +75,8 @@ export function App() {
         <StatCard label="Serviços com alerta" value={dashboard?.summary.serviceProblems ?? 0} hint="systemd diferente de RUNNING" />
       </section>
 
+      <OperationMap stations={filteredStations} onSelect={selectStation} />
+
       <section className="toolbar card">
         <Activity size={20} />
         <div className="search-box">
@@ -94,6 +97,7 @@ export function App() {
             <h2>{selectedStation.name}</h2>
             <dl>
               <div><dt>Localização</dt><dd>{selectedStation.location ?? '-'}</dd></div>
+              <div><dt>Coordenadas</dt><dd>{selectedStation.latitude?.toFixed(4) ?? '-'}, {selectedStation.longitude?.toFixed(4) ?? '-'}</dd></div>
               <div><dt>IP</dt><dd>{selectedStation.ipAddress ?? '-'}</dd></div>
               <div><dt>Agente</dt><dd>{selectedStation.agentVersion ?? '-'}</dd></div>
               <div><dt>Último heartbeat</dt><dd>{formatDate(selectedStation.lastHeartbeatAt)}</dd></div>
