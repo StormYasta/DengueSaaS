@@ -1,40 +1,41 @@
-import { MapPin } from 'lucide-react';
+import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import { Station } from '../services/api';
+import { formatDuration, formatPercent, formatTemperature } from '../utils/format';
 
 type OperationMapProps = {
   stations: Station[];
   onSelect: (stationId: string) => void;
 };
 
-const bounds = {
-  minLat: -20.9,
-  maxLat: -20.76,
-  minLng: -49.47,
-  maxLng: -49.28,
-};
+const center: [number, number] = [-20.8197, -49.3794];
 
-function getPointPosition(station: Station) {
-  const latitude = station.latitude ?? bounds.minLat;
-  const longitude = station.longitude ?? bounds.minLng;
-
-  const x = ((longitude - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 100;
-  const y = (1 - (latitude - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * 100;
-
-  return {
-    left: `${Math.min(94, Math.max(6, x))}%`,
-    top: `${Math.min(90, Math.max(8, y))}%`,
-  };
+function getMarkerColor(station: Station) {
+  if (station.computedStatus === 'OFFLINE') return '#ff6b6b';
+  if (station.serviceStatus !== 'RUNNING') return '#f4bf50';
+  if ((station.lastTemperatureCelsius ?? 0) >= 65 || (station.lastDiskPercent ?? 0) >= 90) return '#f4bf50';
+  return '#2ad37f';
 }
 
-function getStatusClass(station: Station) {
-  if (station.computedStatus === 'OFFLINE') return 'danger';
-  if (station.serviceStatus !== 'RUNNING') return 'warning';
-  if ((station.lastTemperatureCelsius ?? 0) >= 65 || (station.lastDiskPercent ?? 0) >= 90) return 'warning';
-  return 'success';
+function FitMapBounds({ stations }: { stations: Station[] }) {
+  const map = useMap();
+  const points = stations
+    .filter((station) => typeof station.latitude === 'number' && typeof station.longitude === 'number')
+    .map((station) => [station.latitude as number, station.longitude as number] as [number, number]);
+
+  if (points.length > 1) {
+    window.setTimeout(() => {
+      map.fitBounds(points, { padding: [34, 34], maxZoom: 13 });
+    }, 0);
+  }
+
+  return null;
 }
 
 export function OperationMap({ stations, onSelect }: OperationMapProps) {
-  const mappedStations = stations.filter((station) => station.latitude && station.longitude);
+  const mappedStations = stations.filter(
+    (station) => typeof station.latitude === 'number' && typeof station.longitude === 'number',
+  );
 
   return (
     <div className="card map-card">
@@ -42,7 +43,7 @@ export function OperationMap({ stations, onSelect }: OperationMapProps) {
         <div>
           <span className="eyebrow">Monitoramento geográfico</span>
           <h2>Mapa operacional — São José do Rio Preto</h2>
-          <p>Mock com estações distribuídas em pontos de referência inspirados na rede de UBS.</p>
+          <p>Estações de demonstração posicionadas em referências territoriais inspiradas em UBS.</p>
         </div>
         <div className="map-legend">
           <span><i className="dot success" /> Saudável</span>
@@ -51,26 +52,46 @@ export function OperationMap({ stations, onSelect }: OperationMapProps) {
         </div>
       </div>
 
-      <div className="map-area">
-        <div className="map-grid" />
-        <span className="map-label north">Zona Norte</span>
-        <span className="map-label center">Centro</span>
-        <span className="map-label south">Zona Sul</span>
-        <span className="map-label east">Leste</span>
-        <span className="map-label west">Oeste</span>
+      <div className="leaflet-map-area">
+        <MapContainer center={center} zoom={12} scrollWheelZoom className="leaflet-map">
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
 
-        {mappedStations.map((station) => (
-          <button
-            key={station.id}
-            className={`map-marker ${getStatusClass(station)}`}
-            style={getPointPosition(station)}
-            onClick={() => onSelect(station.id)}
-            title={`${station.name} — ${station.location ?? ''}`}
-          >
-            <MapPin size={18} />
-            <span>{station.slug}</span>
-          </button>
-        ))}
+          <FitMapBounds stations={mappedStations} />
+
+          {mappedStations.map((station) => {
+            const markerColor = getMarkerColor(station);
+
+            return (
+              <CircleMarker
+                key={station.id}
+                center={[station.latitude as number, station.longitude as number]}
+                pathOptions={{ color: markerColor, fillColor: markerColor, fillOpacity: 0.92, weight: 3 }}
+                radius={12}
+                eventHandlers={{ click: () => onSelect(station.id) }}
+              >
+                <Popup>
+                  <div className="map-popup">
+                    <strong>{station.slug} — {station.name}</strong>
+                    <span>{station.location ?? 'Sem localização cadastrada'}</span>
+                    <div className="map-popup-grid">
+                      <small>Status</small><b>{station.computedStatus}</b>
+                      <small>Serviço</small><b>{station.serviceStatus}</b>
+                      <small>CPU</small><b>{formatPercent(station.lastCpuPercent)}</b>
+                      <small>RAM</small><b>{formatPercent(station.lastMemoryPercent)}</b>
+                      <small>Disco</small><b>{formatPercent(station.lastDiskPercent)}</b>
+                      <small>Temp.</small><b>{formatTemperature(station.lastTemperatureCelsius)}</b>
+                      <small>Último dado</small><b>{formatDuration(station.secondsSinceLastData)}</b>
+                    </div>
+                    <button type="button" onClick={() => onSelect(station.id)}>Ver detalhes</button>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            );
+          })}
+        </MapContainer>
       </div>
     </div>
   );
