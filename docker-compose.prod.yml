@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dengue-saas-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dengue}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dengue_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-dengue_saas}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dengue} -d ${POSTGRES_DB:-dengue_saas}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dengue_network
+
+  api:
+    build:
+      context: ./apps/api
+    container_name: dengue-saas-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3333
+      DATABASE_URL: postgresql://${POSTGRES_USER:-dengue}:${POSTGRES_PASSWORD:-dengue_change_me}@postgres:5432/${POSTGRES_DB:-dengue_saas}?schema=public
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      OFFLINE_AFTER_SECONDS: ${OFFLINE_AFTER_SECONDS:-120}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dengue_network
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        VITE_API_URL: /api
+    container_name: dengue-saas-web
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    depends_on:
+      - api
+    networks:
+      - dengue_network
+
+volumes:
+  postgres_data:
+
+networks:
+  dengue_network:
+    driver: bridge
