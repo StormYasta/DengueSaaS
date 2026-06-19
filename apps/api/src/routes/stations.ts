@@ -8,6 +8,8 @@ const createStationSchema = z.object({
   slug: z.string().min(2).regex(/^[a-zA-Z0-9-_]+$/),
   location: z.string().optional(),
   description: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
 });
 
 export async function stationRoutes(app: FastifyInstance) {
