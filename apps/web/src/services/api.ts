@@ -5,6 +5,8 @@ export type Station = {
   name: string;
   slug: string;
   location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   ipAddress?: string | null;
   agentVersion?: string | null;
   computedStatus: 'ONLINE' | 'OFFLINE';
