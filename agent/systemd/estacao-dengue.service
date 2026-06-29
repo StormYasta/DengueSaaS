@@ -1,0 +1,17 @@
+[Unit]
+Description=Estação DengueSaaS + Dojot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/dengue-agent
+EnvironmentFile=/opt/dengue-agent/.env
+ExecStart=/opt/dengue-agent/.venv/bin/python /opt/dengue-agent/estacao_dojot_saas.py
+Restart=always
+RestartSec=10
+User=empro01
+Group=empro01
+
+[Install]
+WantedBy=multi-user.target
