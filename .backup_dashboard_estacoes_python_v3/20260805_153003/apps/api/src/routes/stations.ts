@@ -14,34 +14,19 @@ const createStationSchema = z.object({
 
 export async function stationRoutes(app: FastifyInstance) {
   app.get('/stations', async () => {
-    const stations = await prisma.station.findMany({
-      orderBy: { name: 'asc' },
-      include: {
-        events: {
-          where: { type: 'SENSOR_PAYLOAD' },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
-      },
-    });
+    const stations = await prisma.station.findMany({ orderBy: { name: 'asc' } });
 
-    return stations.map((station) => {
-      const latestReading = station.events[0];
-      const { events, ...stationData } = station;
-
-      return {
-        ...stationData,
-        computedStatus: isStationOnline(station) ? 'ONLINE' : 'OFFLINE',
-        secondsSinceHeartbeat: secondsSince(station.lastHeartbeatAt),
-        secondsSinceLastData: secondsSince(station.lastDataReceivedAt),
-        latestSensorPayload: latestReading?.metadata ?? null,
-        latestSensorPayloadAt: latestReading?.createdAt ?? null,
-      };
-    });
+    return stations.map((station) => ({
+      ...station,
+      computedStatus: isStationOnline(station) ? 'ONLINE' : 'OFFLINE',
+      secondsSinceHeartbeat: secondsSince(station.lastHeartbeatAt),
+      secondsSinceLastData: secondsSince(station.lastDataReceivedAt),
+    }));
   });
 
   app.post('/stations', async (request, reply) => {
     const body = createStationSchema.parse(request.body);
+
     const station = await prisma.station.create({ data: body });
     reply.code(201);
     return station;
@@ -54,11 +39,7 @@ export async function stationRoutes(app: FastifyInstance) {
       where: { id: params.id },
       include: {
         metrics: { orderBy: { collectedAt: 'desc' }, take: 60 },
-        events: {
-          where: { type: { not: 'SENSOR_PAYLOAD' } },
-          orderBy: { createdAt: 'desc' },
-          take: 20,
-        },
+        events: { orderBy: { createdAt: 'desc' }, take: 20 },
         logs: { orderBy: { occurredAt: 'desc' }, take: 50 },
         commands: { orderBy: { requestedAt: 'desc' }, take: 20 },
       },
@@ -68,44 +49,18 @@ export async function stationRoutes(app: FastifyInstance) {
       return reply.code(404).send({ message: 'Estação não encontrada' });
     }
 
-    const sensorEvents = await prisma.event.findMany({
-      where: {
-        stationId: station.id,
-        type: 'SENSOR_PAYLOAD',
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 96,
-    });
-
-    const sensorReadings = sensorEvents
-      .map((event) => ({
-        id: event.id,
-        collectedAt: event.createdAt,
-        payload: event.metadata,
-      }))
-      .reverse();
-
-    const latestReading = sensorReadings.at(-1);
-
     return {
       ...station,
       computedStatus: isStationOnline(station) ? 'ONLINE' : 'OFFLINE',
       secondsSinceHeartbeat: secondsSince(station.lastHeartbeatAt),
       secondsSinceLastData: secondsSince(station.lastDataReceivedAt),
       metrics: station.metrics.reverse(),
-      sensorReadings,
-      latestSensorPayload: latestReading?.payload ?? null,
-      latestSensorPayloadAt: latestReading?.collectedAt ?? null,
     };
   });
 
   app.get('/stations/:id/metrics', async (request) => {
     const params = z.object({ id: z.string() }).parse(request.params);
-    const query = z
-      .object({
-        limit: z.coerce.number().min(1).max(500).default(120),
-      })
-      .parse(request.query);
+    const query = z.object({ limit: z.coerce.number().min(1).max(500).default(120) }).parse(request.query);
 
     const metrics = await prisma.metric.findMany({
       where: { stationId: params.id },

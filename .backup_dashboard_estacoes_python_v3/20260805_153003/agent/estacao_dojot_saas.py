@@ -223,22 +223,18 @@ def ler_chuva():
 
 def ler_velocidade_vento():
     global contador_pulsos, ultimo_tempo_leitura
-
     agora = time.time()
     dt = agora - ultimo_tempo_leitura
     pulsos = contador_pulsos
-
     contador_pulsos = 0
     ultimo_tempo_leitura = agora
 
     if dt <= 0:
-        return 0.0, pulsos, 0.0, 0.0
+        return 0.0
 
     rpm = (pulsos * 60.0) / dt
     vel_ms = ((4 * math.pi * RAIO_ANEMOMETRO_MM * rpm) / 60.0) / 1000.0
-    vel_kmh = vel_ms * 3.6
-
-    return vel_kmh, pulsos, rpm, dt
+    return vel_ms * 3.6
 
 
 def ler_direcao_vento():
@@ -368,7 +364,6 @@ def enviar_saas(payload):
         "uptimeSeconds": get_uptime_seconds(),
         "lastCollectionAt": datetime.now().isoformat(),
         "recordsLast24h": 96,
-        "sensorPayload": payload,
     }
 
     try:
@@ -430,12 +425,7 @@ try:
         temperatura, umidade = ler_dht()
         ppm = ler_mq135()
         v_chuva, chuva_bin = ler_chuva()
-        (
-            vel_vento,
-            anemometro_pulsos,
-            anemometro_rpm,
-            anemometro_intervalo,
-        ) = ler_velocidade_vento()
+        vel_vento = ler_velocidade_vento()
         dir_vento = ler_direcao_vento()
 
         payload = {
@@ -449,17 +439,9 @@ try:
             "dir_vento": dir_vento if dir_vento is not None else 0,
         }
 
-        payload_saas = {
-            **payload,
-            "chuva_tensao": round(v_chuva, 3),
-            "anemometro_pulsos": int(anemometro_pulsos),
-            "anemometro_rpm": round(anemometro_rpm, 2),
-            "anemometro_intervalo_s": round(anemometro_intervalo, 2),
-        }
-
         salvar_csv(payload)
         enviar_dojot(payload)
-        enviar_saas(payload_saas)
+        enviar_saas(payload)
 
         time.sleep(READ_INTERVAL_SECONDS)
 

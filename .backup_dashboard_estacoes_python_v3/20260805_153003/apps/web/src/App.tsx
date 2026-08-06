@@ -4,7 +4,6 @@ import { MetricsChart } from './components/MetricsChart';
 import { OperationMap } from './components/OperationMap';
 import { StatCard } from './components/StatCard';
 import { StationTable } from './components/StationTable';
-import { EnvironmentalDashboard } from './components/EnvironmentalDashboard';
 import { api, DashboardResponse, StationDetail } from './services/api';
 import { formatDate, formatDuration, formatPercent, formatTemperature } from './utils/format';
 
@@ -112,12 +111,6 @@ export function App() {
           </div>
 
           <MetricsChart metrics={selectedStation.metrics} />
-
-          <EnvironmentalDashboard
-            readings={selectedStation.sensorReadings}
-            latest={selectedStation.latestSensorPayload}
-            latestAt={selectedStation.latestSensorPayloadAt}
-          />
 
           <div className="card logs-card">
             <h2>Eventos recentes</h2>

@@ -1,28 +1,6 @@
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3333/api';
 const LOCAL_PRESENTATION_MODE = import.meta.env.VITE_LOCAL_PRESENTATION === 'true';
-const STORAGE_KEY = 'dengue-saas-presentation-data-v2';
-
-export type SensorPayload = {
-  temperatura?: number | null;
-  umidade?: number | null;
-  pressao_abs?: number | null;
-  pressao_rel?: number | null;
-  qual_ar?: number | null;
-  pluviometrico?: number | boolean | null;
-  chuva_tensao?: number | null;
-  vel_vento?: number | null;
-  dir_vento?: number | null;
-  anemometro_pulsos?: number | null;
-  anemometro_rpm?: number | null;
-  anemometro_intervalo_s?: number | null;
-  [key: string]: unknown;
-};
-
-export type SensorReading = {
-  id: string;
-  collectedAt: string;
-  payload: SensorPayload;
-};
+const STORAGE_KEY = 'dengue-saas-presentation-data-v1';
 
 export type Station = {
   id: string;
@@ -44,8 +22,6 @@ export type Station = {
   uptimeSeconds?: number | null;
   secondsSinceHeartbeat?: number | null;
   secondsSinceLastData?: number | null;
-  latestSensorPayload?: SensorPayload | null;
-  latestSensorPayloadAt?: string | null;
 };
 
 export type DashboardResponse = {
@@ -70,7 +46,6 @@ export type Metric = {
 
 export type StationDetail = Station & {
   metrics: Metric[];
-  sensorReadings: SensorReading[];
   events: Array<{ id: string; severity: string; type: string; message: string; createdAt: string }>;
   logs: Array<{ id: string; level: string; message: string; source?: string | null; occurredAt: string }>;
 };
@@ -105,38 +80,6 @@ function metricHistory(stationId: string, baseCpu: number, baseMemory: number, b
       diskPercent: clamp(baseDisk + index * 0.04, 5, 99),
       temperatureCelsius: clamp(baseTemp + wave * 3, 25, 86),
       uptimeSeconds: 86400 * 4 + index * 1800,
-    };
-  });
-}
-
-function sensorHistory(stationId: string, slug: string): SensorReading[] {
-  const index = Number(slug.replace(/\D/g, '')) || 1;
-
-  return Array.from({ length: 48 }).map((_, point) => {
-    const wave = Math.sin(point / 5);
-    const wind = Math.max(0, 4.5 + index * 0.6 + wave * 3.2);
-    const direction = (index * 45 + point * 4) % 360;
-    const rpm = wind / 0.07917;
-    const interval = 900;
-    const pulses = Math.round((rpm * interval) / 60);
-
-    return {
-      id: `${stationId}-sensor-${point}`,
-      collectedAt: minutesAgo((47 - point) * 30),
-      payload: {
-        temperatura: Number((24 + index * 0.45 + wave * 2.2).toFixed(1)),
-        umidade: Number((62 - wave * 9 - index).toFixed(0)),
-        pressao_abs: 0,
-        pressao_rel: 0,
-        qual_ar: Number((410 + index * 18 + wave * 35).toFixed(1)),
-        pluviometrico: point % 19 === 0 ? 1 : 0,
-        chuva_tensao: point % 19 === 0 ? 1.22 : 2.84,
-        vel_vento: Number(wind.toFixed(2)),
-        dir_vento: Number(direction.toFixed(0)),
-        anemometro_pulsos: pulses,
-        anemometro_rpm: Number(rpm.toFixed(2)),
-        anemometro_intervalo_s: interval,
-      },
     };
   });
 }
@@ -182,9 +125,6 @@ function createStation(input: {
     secondsSinceHeartbeat: input.heartbeatAgo === null ? null : input.heartbeatAgo * 60,
     secondsSinceLastData: input.dataAgo === null ? null : input.dataAgo * 60,
     metrics: metricHistory(input.id, input.cpu, input.memory, input.disk, input.temp),
-    sensorReadings: sensorHistory(input.id, input.slug),
-    latestSensorPayload: sensorHistory(input.id, input.slug).at(-1)?.payload ?? null,
-    latestSensorPayloadAt: sensorHistory(input.id, input.slug).at(-1)?.collectedAt ?? null,
     events: input.events,
     logs: input.logs,
   };

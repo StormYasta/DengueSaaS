@@ -1,20 +1,10 @@
 import { Station } from '../services/api';
-import {
-  formatDate,
-  formatDuration,
-  formatPercent,
-  formatTemperature,
-} from '../utils/format';
+import { formatDate, formatDuration, formatPercent, formatTemperature } from '../utils/format';
 
 type StationTableProps = {
   stations: Station[];
   onSelect: (stationId: string) => void;
 };
-
-function formatWind(value?: number | null) {
-  if (value === null || value === undefined || value < 0) return '-';
-  return `${value.toFixed(1)} km/h`;
-}
 
 export function StationTable({ stations, onSelect }: StationTableProps) {
   return (
@@ -30,12 +20,10 @@ export function StationTable({ stations, onSelect }: StationTableProps) {
             <tr>
               <th>Estação</th>
               <th>Status</th>
-              <th>Temperatura</th>
-              <th>Umidade</th>
-              <th>Vento</th>
               <th>CPU</th>
               <th>RAM</th>
               <th>Disco</th>
+              <th>Temp</th>
               <th>Serviço</th>
               <th>Último heartbeat</th>
               <th>Último dado</th>
@@ -49,41 +37,20 @@ export function StationTable({ stations, onSelect }: StationTableProps) {
                   <small>{station.location ?? station.slug}</small>
                 </td>
                 <td>
-                  <span
-                    className={`badge ${
-                      station.computedStatus === 'ONLINE'
-                        ? 'success'
-                        : 'danger'
-                    }`}
-                  >
+                  <span className={`badge ${station.computedStatus === 'ONLINE' ? 'success' : 'danger'}`}>
                     {station.computedStatus === 'ONLINE' ? 'Online' : 'Offline'}
                   </span>
                 </td>
-                <td>
-                  {formatTemperature(
-                    station.latestSensorPayload?.temperatura ??
-                      station.lastTemperatureCelsius,
-                  )}
-                </td>
-                <td>{formatPercent(station.latestSensorPayload?.umidade)}</td>
-                <td>{formatWind(station.latestSensorPayload?.vel_vento)}</td>
                 <td>{formatPercent(station.lastCpuPercent)}</td>
                 <td>{formatPercent(station.lastMemoryPercent)}</td>
                 <td>{formatPercent(station.lastDiskPercent)}</td>
+                <td>{formatTemperature(station.lastTemperatureCelsius)}</td>
                 <td>
-                  <span
-                    className={`badge ${
-                      station.serviceStatus === 'RUNNING'
-                        ? 'success'
-                        : 'warning'
-                    }`}
-                  >
+                  <span className={`badge ${station.serviceStatus === 'RUNNING' ? 'success' : 'warning'}`}>
                     {station.serviceStatus}
                   </span>
                 </td>
-                <td title={formatDate(station.lastHeartbeatAt)}>
-                  {formatDuration(station.secondsSinceHeartbeat)}
-                </td>
+                <td title={formatDate(station.lastHeartbeatAt)}>{formatDuration(station.secondsSinceHeartbeat)}</td>
                 <td>{formatDuration(station.secondsSinceLastData)}</td>
               </tr>
             ))}

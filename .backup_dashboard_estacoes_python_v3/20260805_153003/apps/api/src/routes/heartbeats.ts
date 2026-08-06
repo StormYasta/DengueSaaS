@@ -3,23 +3,6 @@ import { ServiceStatus, StationStatus } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 
-const sensorPayloadSchema = z
-  .object({
-    temperatura: z.number().optional().nullable(),
-    umidade: z.number().optional().nullable(),
-    pressao_abs: z.number().optional().nullable(),
-    pressao_rel: z.number().optional().nullable(),
-    qual_ar: z.number().optional().nullable(),
-    pluviometrico: z.union([z.number(), z.boolean()]).optional().nullable(),
-    chuva_tensao: z.number().optional().nullable(),
-    vel_vento: z.number().optional().nullable(),
-    dir_vento: z.number().optional().nullable(),
-    anemometro_pulsos: z.number().int().nonnegative().optional().nullable(),
-    anemometro_rpm: z.number().nonnegative().optional().nullable(),
-    anemometro_intervalo_s: z.number().nonnegative().optional().nullable(),
-  })
-  .passthrough();
-
 const heartbeatSchema = z.object({
   stationSlug: z.string().min(2),
   stationName: z.string().min(2).optional(),
@@ -36,7 +19,6 @@ const heartbeatSchema = z.object({
   uptimeSeconds: z.number().int().nonnegative().optional(),
   lastCollectionAt: z.coerce.date().optional().nullable(),
   recordsLast24h: z.number().int().nonnegative().default(0),
-  sensorPayload: sensorPayloadSchema.optional(),
 });
 
 export async function heartbeatRoutes(app: FastifyInstance) {
@@ -109,20 +91,6 @@ export async function heartbeatRoutes(app: FastifyInstance) {
       },
     });
 
-    if (body.sensorPayload) {
-      const metadata = JSON.parse(JSON.stringify(body.sensorPayload));
-
-      await prisma.event.create({
-        data: {
-          stationId: station.id,
-          severity: 'INFO',
-          type: 'SENSOR_PAYLOAD',
-          message: 'Leitura ambiental recebida da estação.',
-          metadata,
-        },
-      });
-    }
-
     if (body.serviceStatus !== ServiceStatus.RUNNING) {
       await prisma.event.create({
         data: {
@@ -135,11 +103,6 @@ export async function heartbeatRoutes(app: FastifyInstance) {
     }
 
     reply.code(201);
-    return {
-      ok: true,
-      stationId: station.id,
-      receivedAt: now,
-      sensorPayloadReceived: Boolean(body.sensorPayload),
-    };
+    return { ok: true, stationId: station.id, receivedAt: now };
   });
 }
