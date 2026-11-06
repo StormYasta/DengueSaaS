@@ -14,6 +14,11 @@ export function App() {
   const [query, setQuery] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [error, setError] = useState<string | null>(null);
+  const [latitudeInput, setLatitudeInput] = useState('');
+  const [longitudeInput, setLongitudeInput] = useState('');
+  const [adminKey, setAdminKey] = useState('');
+  const [locationSaving, setLocationSaving] = useState(false);
+  const [locationMessage, setLocationMessage] = useState<string | null>(null);
 
   async function loadDashboard() {
     try {
@@ -33,6 +38,37 @@ export function App() {
   async function selectStation(id: string) {
     const detail = await api.station(id);
     setSelectedStation(detail);
+    setLatitudeInput(detail.latitude?.toString() ?? '');
+    setLongitudeInput(detail.longitude?.toString() ?? '');
+    setLocationMessage(null);
+  }
+
+  async function saveLocation() {
+    if (!selectedStation) return;
+    const latText = latitudeInput.trim().replace(',', '.');
+    const lonText = longitudeInput.trim().replace(',', '.');
+    const clearing = latText === '' && lonText === '';
+    const latitude = clearing ? null : Number(latText);
+    const longitude = clearing ? null : Number(lonText);
+    if ((!clearing && (!latText || !lonText || !Number.isFinite(latitude) || !Number.isFinite(longitude))) ||
+        (latitude !== null && (latitude < -90 || latitude > 90)) ||
+        (longitude !== null && (longitude < -180 || longitude > 180))) {
+      setLocationMessage('Informe latitude (-90 a 90) e longitude (-180 a 180), ou deixe ambas vazias.');
+      return;
+    }
+    setLocationSaving(true);
+    try {
+      const updated = await api.updateCoordinates(selectedStation.id, latitude, longitude, adminKey);
+      setSelectedStation((current) => current && current.id === updated.id
+        ? { ...current, latitude: updated.latitude, longitude: updated.longitude }
+        : current);
+      setLocationMessage('Coordenadas atualizadas. O mapa usará a posição cadastrada.');
+      await loadDashboard();
+    } catch (err) {
+      setLocationMessage(err instanceof Error ? err.message : 'Erro ao salvar coordenadas.');
+    } finally {
+      setLocationSaving(false);
+    }
   }
 
   useEffect(() => {
@@ -99,6 +135,15 @@ export function App() {
             <dl>
               <div><dt>Localização</dt><dd>{selectedStation.location ?? '-'}</dd></div>
               <div><dt>Coordenadas</dt><dd>{selectedStation.latitude?.toFixed(4) ?? '-'}, {selectedStation.longitude?.toFixed(4) ?? '-'}</dd></div>
+              <div><dt>Editar posição fixa</dt><dd>
+                <form onSubmit={(event) => { event.preventDefault(); void saveLocation(); }} style={{ display: 'grid', gap: 8 }}>
+                  <input aria-label="Latitude" placeholder="Latitude (ex.: -20.8339)" value={latitudeInput} onChange={(event) => setLatitudeInput(event.target.value)} />
+                  <input aria-label="Longitude" placeholder="Longitude (ex.: -49.3999)" value={longitudeInput} onChange={(event) => setLongitudeInput(event.target.value)} />
+                  <input aria-label="Chave administrativa" type="password" autoComplete="off" placeholder="Chave administrativa" value={adminKey} onChange={(event) => setAdminKey(event.target.value)} />
+                  <button type="submit" disabled={locationSaving || !adminKey}>{locationSaving ? 'Salvando...' : 'Salvar coordenadas'}</button>
+                  {locationMessage && <small role="status">{locationMessage}</small>}
+                </form>
+              </dd></div>
               <div><dt>IP</dt><dd>{selectedStation.ipAddress ?? '-'}</dd></div>
               <div><dt>Agente</dt><dd>{selectedStation.agentVersion ?? '-'}</dd></div>
               <div><dt>Último heartbeat</dt><dd>{formatDate(selectedStation.lastHeartbeatAt)}</dd></div>

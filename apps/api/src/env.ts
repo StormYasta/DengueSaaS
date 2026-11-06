@@ -4,4 +4,6 @@ export const env = {
   port: Number(process.env.PORT ?? 3333),
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
   offlineAfterSeconds: Number(process.env.OFFLINE_AFTER_SECONDS ?? 120),
+  stationApiKey: process.env.STATION_API_KEY ?? '',
+  adminApiKey: process.env.ADMIN_API_KEY ?? '',
 };

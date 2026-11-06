@@ -28,6 +28,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-dengue}:${POSTGRES_PASSWORD:-dengue_change_me}@postgres:5432/${POSTGRES_DB:-dengue_saas}?schema=public
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
       OFFLINE_AFTER_SECONDS: ${OFFLINE_AFTER_SECONDS:-120}
+      STATION_API_KEY: ${STATION_API_KEY:-}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -42,7 +44,7 @@ services:
     container_name: dengue-saas-web
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-8080}:80"
+      - "${APP_PORT:-8090}:80"
     depends_on:
       - api
     networks:

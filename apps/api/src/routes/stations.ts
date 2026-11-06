@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { isStationOnline, secondsSince } from '../lib/health.js';
+import { env } from '../env.js';
 
 const createStationSchema = z.object({
   name: z.string().min(2),
@@ -45,6 +46,37 @@ export async function stationRoutes(app: FastifyInstance) {
     const station = await prisma.station.create({ data: body });
     reply.code(201);
     return station;
+  });
+
+  // Localização é mantida no servidor; nunca é sobrescrita pelo heartbeat.
+  // Chave administrativa exigida para evitar edições anônimas no mapa.
+  app.patch('/stations/:id/location', async (request, reply) => {
+    if (!env.adminApiKey) {
+      return reply.code(503).send({ message: 'ADMIN_API_KEY não configurada' });
+    }
+    if (request.headers['x-admin-key'] !== env.adminApiKey) {
+      return reply.code(401).send({ message: 'Chave administrativa inválida' });
+    }
+
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const body = z.object({
+      latitude: z.number().min(-90).max(90).nullable(),
+      longitude: z.number().min(-180).max(180).nullable(),
+    }).refine(
+      (value) => (value.latitude === null) === (value.longitude === null),
+      { message: 'Informe as duas coordenadas ou nenhuma' },
+    ).parse(request.body);
+
+    const station = await prisma.station.findUnique({ where: { id } });
+    if (!station) {
+      return reply.code(404).send({ message: 'Estação não encontrada' });
+    }
+
+    const updated = await prisma.station.update({
+      where: { id },
+      data: { latitude: body.latitude, longitude: body.longitude },
+    });
+    return { id: updated.id, latitude: updated.latitude, longitude: updated.longitude };
   });
 
   app.get('/stations/:id', async (request, reply) => {

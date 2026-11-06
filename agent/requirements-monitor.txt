@@ -1,0 +1,4 @@
+# Agente de monitoramento: não requer bibliotecas GPIO/MQTT.
+psutil>=5.9.8,<8
+requests>=2.32,<3
+python-dotenv>=1.0,<2
