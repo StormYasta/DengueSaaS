@@ -108,8 +108,7 @@ sudo nano /opt/dengue-saas-agent/agent/.env
 ```
 
 Confirmar `SAAS_API_URL=http://10.22.0.24:8090/api`, definir
-`SAAS_AGENT_KEY` correspondente ao servidor, o nome real do serviço de coleta
-(`SERVICE_NAME`) e **um** dos arquivos de saída da coleta:
+`SAAS_AGENT_KEY` correspondente ao servidor, o nome real do serviço de coleta (`SERVICE_NAME`) **ou**, quando não houver unidade systemd, o nome do script em `COLLECTOR_PROCESS_MATCH`; além disso, indicar **um** dos arquivos de saída da coleta:
 `SENSOR_CSV_FILE` ou `SENSOR_JSON_FILE`.
 
 Se não houver arquivo compartilhado, deixar ambos vazios inicialmente:
