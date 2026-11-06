@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { ServiceStatus, StationStatus } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { env } from '../env.js';
 
 const sensorPayloadSchema = z
   .object({
@@ -41,6 +42,9 @@ const heartbeatSchema = z.object({
 
 export async function heartbeatRoutes(app: FastifyInstance) {
   app.post('/heartbeats', async (request, reply) => {
+    if (env.stationApiKey && request.headers['x-station-key'] !== env.stationApiKey) {
+      return reply.code(401).send({ message: 'Chave da estação inválida' });
+    }
     const body = heartbeatSchema.parse(request.body);
     const now = new Date();
 
@@ -66,8 +70,6 @@ export async function heartbeatRoutes(app: FastifyInstance) {
       },
       update: {
         location: body.location,
-        latitude: body.latitude ?? undefined,
-        longitude: body.longitude ?? undefined,
         ipAddress: body.ipAddress,
         agentVersion: body.agentVersion,
         status: StationStatus.ONLINE,
