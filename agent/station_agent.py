@@ -158,6 +158,8 @@ def collect_heartbeat(last_collection_at, new_payload):
         "uptimeSeconds": int(time.time() - psutil.boot_time()),
         "recordsLast24h": 0,
     }
+    if data["ipAddress"] is None:
+        del data["ipAddress"]
     if last_collection_at:
         data["lastCollectionAt"] = last_collection_at
     if new_payload:
