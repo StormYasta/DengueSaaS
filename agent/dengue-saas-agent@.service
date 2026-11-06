@@ -1,0 +1,16 @@
+[Unit]
+Description=DengueSaaS Raspberry Pi heartbeat (%i)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/opt/dengue-saas-agent/agent
+ExecStart=/opt/dengue-saas-agent/agent/.venv/bin/python /opt/dengue-saas-agent/agent/station_agent.py
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
