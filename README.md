@@ -89,7 +89,7 @@ cd agent
 cp .env.example .env
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-monitor.txt
 python station_agent.py
 ```
 
@@ -101,8 +101,9 @@ DHT22 com o serviço existente. Os dados ambientais podem ser lidos de um CSV/JS
 gerado pelo coletor. Configure `agent/.env.monitor.example` e instale
 `agent/dengue-saas-agent@.service`.
 
-O servidor já utilizado em laboratório oferece o SaaS na porta `8090`,
-sem interferir na porta `8080` da Dojot. As coordenadas são mantidas
+A nova instalação é destinada ao servidor `10.22.0.24`, no diretório
+`/u01/dengue-saas`. A porta `8090` é sugerida e precisa ser verificada
+antes da instalação; não alterar os containers Dojot em `/u01/docker-compose`. As coordenadas são mantidas
 manualmente no painel, com chave `ADMIN_API_KEY`, e não são atualizadas
 pelos heartbeats.
 
