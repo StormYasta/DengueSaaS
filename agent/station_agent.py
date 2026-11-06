@@ -22,6 +22,7 @@ STATION_SLUG = os.getenv("STATION_SLUG", "E01")
 STATION_NAME = os.getenv("STATION_NAME", STATION_SLUG)
 STATION_LOCATION = os.getenv("STATION_LOCATION", "")
 SERVICE_NAME = os.getenv("SERVICE_NAME", "estacao.service")
+COLLECTOR_PROCESS_MATCH = os.getenv("COLLECTOR_PROCESS_MATCH", "").strip()
 HEARTBEAT_INTERVAL_SECONDS = max(10, int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "30")))
 SAAS_TIMEOUT_SECONDS = max(1, int(os.getenv("SAAS_TIMEOUT_SECONDS", "10")))
 AGENT_VERSION = "1.2.0"
@@ -56,6 +57,23 @@ def get_cpu_temperature():
 
 
 def get_service_status():
+    # Estações cujo coletor é executado manualmente (sem unidade systemd).
+    # A busca é pelo nome exato do arquivo de script em um argumento do processo.
+    if COLLECTOR_PROCESS_MATCH:
+        try:
+            for process in psutil.process_iter(["pid", "cmdline"]):
+                if process.info["pid"] == os.getpid():
+                    continue
+                args = process.info.get("cmdline") or []
+                if any(Path(arg).name == COLLECTOR_PROCESS_MATCH for arg in args[1:]):
+                    return "RUNNING"
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+        return "STOPPED"
+
+    if not SERVICE_NAME:
+        return "UNKNOWN"
+
     try:
         result = subprocess.run(
             ["systemctl", "is-active", SERVICE_NAME],
