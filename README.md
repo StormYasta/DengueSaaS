@@ -93,6 +93,21 @@ pip install -r requirements.txt
 python station_agent.py
 ```
 
+## Integração atual (Raspberry Pi 5 + Dojot)
+
+Para integrar uma estação que já possui um coletor MQTT ativo, use o agente
+**independente** `agent/station_agent.py`: ele não disputa GPIO, ADS1115 ou
+DHT22 com o serviço existente. Os dados ambientais podem ser lidos de um CSV/JSON
+gerado pelo coletor. Configure `agent/.env.monitor.example` e instale
+`agent/dengue-saas-agent@.service`.
+
+O servidor já utilizado em laboratório oferece o SaaS na porta `8090`,
+sem interferir na porta `8080` da Dojot. As coordenadas são mantidas
+manualmente no painel, com chave `ADMIN_API_KEY`, e não são atualizadas
+pelos heartbeats.
+
+Procedimento detalhado: [Integração Pi 5](docs/INTEGRACAO_PI5_2026-11.md).
+
 ## MVP implementado
 
 - Cadastro/listagem de estações
