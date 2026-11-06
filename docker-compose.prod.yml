@@ -44,7 +44,7 @@ services:
     container_name: dengue-saas-web
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-8080}:80"
+      - "${APP_PORT:-8090}:80"
     depends_on:
       - api
     networks:
