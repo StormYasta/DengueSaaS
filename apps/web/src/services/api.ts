@@ -460,6 +460,19 @@ export const api = {
     if (LOCAL_PRESENTATION_MODE) return localStation(id);
     return request<StationDetail>(`/stations/${id}`);
   },
+  updateCoordinates: async (id: string, latitude: number | null, longitude: number | null, adminKey: string) => {
+    if (LOCAL_PRESENTATION_MODE) throw new Error('Edição indisponível no modo demonstração.');
+    const response = await fetch(`${API_URL}/stations/${id}/location`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Key': adminKey,
+      },
+      body: JSON.stringify({ latitude, longitude }),
+    });
+    if (!response.ok) throw new Error(`Não foi possível salvar coordenadas (HTTP ${response.status})`);
+    return response.json() as Promise<{ id: string; latitude: number | null; longitude: number | null }>;
+  },
   resetLocalPresentation: () => {
     window.localStorage.removeItem(STORAGE_KEY);
     window.location.reload();
