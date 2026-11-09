@@ -58,7 +58,7 @@ export async function authRoutes(app: FastifyInstance) {
       }),
     ]);
     await prisma.event.create({
-      data: { type: 'ADMIN_PASSWORD_CHANGED', message: 'Senha do administrador alterada', severity: 'INFO' },
+      data: { type: 'ADMIN_PASSWORD_CHANGED', message: `Senha alterada pela conta ${user.username}`, severity: 'INFO' },
     });
     return { ok: true };
   });
