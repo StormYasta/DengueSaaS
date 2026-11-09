@@ -7,6 +7,15 @@ on:
     branches: ['feat/**', 'fix/**', 'feat/analytics-cidade-filtros-20261109', 'feat/mapa-regioes-riopreto-20261109', 'feat/mapa-offwhite-20261109']
 
 jobs:
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m py_compile agent/station_agent.py
+
   web:
     runs-on: ubuntu-latest
     defaults:
@@ -33,12 +42,3 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npx prisma generate
       - run: npm run build
-
-  agent:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: python -m py_compile agent/station_agent.py
