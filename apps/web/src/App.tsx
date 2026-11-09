@@ -64,6 +64,8 @@ export function App() {
   const [detailAnalytics, setDetailAnalytics] = useState<AnalyticsResponse | null>(null);
   const [analyticsError, setAnalyticsError] = useState('');
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [overviewRefresh, setOverviewRefresh] = useState(0);
+  const [detailRefresh, setDetailRefresh] = useState(0);
   const [selectedStation, setSelectedStation] = useState<StationDetail | null>(null);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [page, setPage] = useState<Page>('overview');
@@ -133,7 +135,7 @@ export function App() {
     void refresh();
     const timer = window.setInterval(() => { void refresh(); }, 60_000);
     return () => { mounted = false; window.clearInterval(timer); };
-  }, [user?.id, user?.mustChangePassword, page, overviewPeriod, overviewStationId]);
+  }, [user?.id, user?.mustChangePassword, page, overviewPeriod, overviewStationId, overviewRefresh]);
 
   useEffect(() => {
     if (!user || user.mustChangePassword || page !== 'telemetry' || !selectedStation) return;
@@ -143,8 +145,15 @@ export function App() {
     setAnalyticsError('');
     async function refresh() {
       try {
-        const result = await api.analytics(detailPeriod, selectedStation!.id);
-        if (mounted) { setDetailAnalytics(result); setAnalyticsError(''); }
+        const [result, updatedStation] = await Promise.all([
+          api.analytics(detailPeriod, selectedStation!.id),
+          api.station(selectedStation!.id),
+        ]);
+        if (mounted) {
+          setDetailAnalytics(result);
+          setSelectedStation((old) => old?.id === updatedStation.id ? updatedStation : old);
+          setAnalyticsError('');
+        }
       } catch (err) {
         if (mounted) setAnalyticsError(err instanceof Error ? err.message : 'Falha no histórico da estação');
       } finally {
@@ -154,7 +163,7 @@ export function App() {
     void refresh();
     const timer = window.setInterval(() => { void refresh(); }, 60_000);
     return () => { mounted = false; window.clearInterval(timer); };
-  }, [user?.id, user?.mustChangePassword, page, detailPeriod, selectedStation?.id]);
+  }, [user?.id, user?.mustChangePassword, page, detailPeriod, selectedStation?.id, detailRefresh]);
 
   async function login(event: React.FormEvent) {
     event.preventDefault();
@@ -380,7 +389,9 @@ export function App() {
                 <h2>{overviewCity ? 'Resumo da cidade' : 'Resumo da estação'}</h2>
                 <p>{overviewCity ? 'Médias das estações monitoradas em São José do Rio Preto' : 'Indicadores da estação selecionada'}</p>
               </div>
-              <div className="overview-updated"><RefreshCw size={16}/> Média atualizada a cada minuto</div>
+              <button type="button" className="overview-updated" onClick={() => setOverviewRefresh((n) => n + 1)} title="Atualizar médias e históricos">
+                <RefreshCw size={16}/> Atualizar médias
+              </button>
             </div>
 
             <PeriodControls value={overviewPeriod} onChange={setOverviewPeriod}
@@ -470,7 +481,7 @@ export function App() {
               </label>
               {selectedStation && <div className="header-actions">
                 <button className="outline-button" onClick={() => { void exportCsv(selectedStation.id); }}><Download size={16}/> CSV da estação</button>
-                <button className="outline-button" onClick={() => { void openStation(selectedStation.id); }}><RefreshCw size={16}/> Atualizar</button>
+                <button className="outline-button" onClick={() => { setDetailRefresh((n) => n + 1); }}><RefreshCw size={16}/> Atualizar</button>
               </div>}
             </div>
             {selectedStation && <PeriodControls value={detailPeriod} onChange={setDetailPeriod}/>}
