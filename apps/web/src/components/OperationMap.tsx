@@ -67,7 +67,9 @@ function formatAirIndex(value?: number | null) {
 
 function stationStatus(station: Station) {
   if (station.computedStatus !== 'ONLINE') return { label: 'Offline', tone: 'danger' };
-  if (station.serviceStatus !== 'RUNNING') return { label: 'Atenção', tone: 'warning' };
+  if (station.serviceStatus !== 'RUNNING' || (station.lastTemperatureCelsius ?? 0) >= 65 || (station.lastDiskPercent ?? 0) >= 90) {
+    return { label: 'Atenção', tone: 'warning' };
+  }
   return { label: 'Online', tone: 'success' };
 }
 
