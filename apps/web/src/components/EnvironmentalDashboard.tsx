@@ -11,18 +11,9 @@ import {
   Timer,
   Wind,
 } from 'lucide-react';
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 import { SensorPayload, SensorReading } from '../services/api';
 import { formatDate } from '../utils/format';
+import { MeasurementCharts } from './MeasurementCharts';
 
 type EnvironmentalDashboardProps = {
   readings: SensorReading[];
@@ -31,6 +22,7 @@ type EnvironmentalDashboardProps = {
 };
 
 function numeric(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -64,13 +56,6 @@ function directionLabel(degrees: number | null): string {
   const labels = ['N', 'NE', 'L', 'SE', 'S', 'SO', 'O', 'NO'];
   const normalized = ((degrees % 360) + 360) % 360;
   return labels[Math.round(normalized / 45) % labels.length];
-}
-
-function chartTime(value: string) {
-  return new Intl.DateTimeFormat('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
 }
 
 export function EnvironmentalDashboard({
@@ -114,12 +99,11 @@ export function EnvironmentalDashboard({
   } as CSSProperties;
 
   const history = readings.map((reading) => ({
-    horario: chartTime(reading.collectedAt),
-    temperatura: numeric(reading.payload.temperatura),
-    umidade: numeric(reading.payload.umidade),
-    qualidadeAr: numeric(reading.payload.qual_ar),
-    vento: numeric(reading.payload.vel_vento),
-    direcao: numeric(reading.payload.dir_vento),
+    at: reading.collectedAt,
+    temperatura: available(reading.payload.temperatura),
+    umidade: available(reading.payload.umidade),
+    qual_ar: available(reading.payload.qual_ar),
+    vel_vento: available(reading.payload.vel_vento),
   }));
 
   return (
@@ -157,8 +141,8 @@ export function EnvironmentalDashboard({
         <article>
           <Activity size={22} />
           <span>Qualidade do ar</span>
-          <strong>{formatValue(airQuality, ' ppm')}</strong>
-          <small>MQ-135</small>
+          <strong>{formatValue(airQuality, '')}</strong>
+          <small>MQ-135 · leitura bruta (não ppm)</small>
         </article>
 
         <article className={raining ? 'rain-detected' : ''}>
@@ -235,86 +219,18 @@ export function EnvironmentalDashboard({
         </div>
       </div>
 
-      <div className="environmental-charts">
-        <article className="environmental-chart">
-          <h3>Temperatura e umidade</h3>
-          <ResponsiveContainer width="100%" height={270}>
-            <LineChart data={history}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.18} />
-              <XAxis dataKey="horario" />
-              <YAxis yAxisId="temperature" />
-              <YAxis yAxisId="humidity" orientation="right" domain={[0, 100]} />
-              <Tooltip />
-              <Legend />
-              <Line
-                yAxisId="temperature"
-                type="monotone"
-                dataKey="temperatura"
-                name="Temperatura °C"
-                stroke="#ff9f43"
-                strokeWidth={2.5}
-                dot={false}
-                connectNulls
-              />
-              <Line
-                yAxisId="humidity"
-                type="monotone"
-                dataKey="umidade"
-                name="Umidade %"
-                stroke="#55abff"
-                strokeWidth={2.5}
-                dot={false}
-                connectNulls
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </article>
+      <MeasurementCharts
+        points={history}
+        heading="Histórico dos sensores"
+        description="Cada indicador tem seu próprio gráfico e eixo. Valores ausentes não são interpolados."
+      />
 
-        <article className="environmental-chart">
-          <h3>Vento e qualidade do ar</h3>
-          <ResponsiveContainer width="100%" height={270}>
-            <LineChart data={history}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.18} />
-              <XAxis dataKey="horario" />
-              <YAxis yAxisId="wind" />
-              <YAxis yAxisId="air" orientation="right" />
-              <Tooltip />
-              <Legend />
-              <Line
-                yAxisId="wind"
-                type="monotone"
-                dataKey="vento"
-                name="Vento km/h"
-                stroke="#2ad37f"
-                strokeWidth={2.5}
-                dot={false}
-                connectNulls
-              />
-              <Line
-                yAxisId="air"
-                type="monotone"
-                dataKey="qualidadeAr"
-                name="Qualidade do ar ppm"
-                stroke="#d685ff"
-                strokeWidth={2.5}
-                dot={false}
-                connectNulls
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </article>
-      </div>
-
-      <div className="pressure-summary">
-        <div>
-          <span>Pressão absoluta</span>
-          <strong>{formatValue(absolutePressure, ' hPa')}</strong>
+      {(absolutePressure !== null || relativePressure !== null) && (
+        <div className="pressure-summary">
+          {absolutePressure !== null && <div><span>Pressão absoluta</span><strong>{formatValue(absolutePressure, ' hPa')}</strong></div>}
+          {relativePressure !== null && <div><span>Pressão relativa</span><strong>{formatValue(relativePressure, ' hPa')}</strong></div>}
         </div>
-        <div>
-          <span>Pressão relativa</span>
-          <strong>{formatValue(relativePressure, ' hPa')}</strong>
-        </div>
-      </div>
+      )}
 
       <details className="payload-viewer">
         <summary>Ver payload JSON completo</summary>
