@@ -27,6 +27,7 @@ if (demoMode) {
   app.log.warn('API rodando em DEMO_MODE=true. Prisma e PostgreSQL não serão usados.');
 } else {
   const { authRoutes } = await import('./routes/auth.js');
+  const { userRoutes } = await import('./routes/users.js');
   const { adminRoutes } = await import('./routes/admin.js');
   const { agentCommandRoutes } = await import('./routes/agent-commands.js');
   const { dashboardRoutes } = await import('./routes/dashboard.js');
@@ -37,6 +38,7 @@ if (demoMode) {
   const { stationRoutes } = await import('./routes/stations.js');
 
   app.register(authRoutes, { prefix: '/api' });
+  app.register(userRoutes, { prefix: '/api' });
   app.register(adminRoutes, { prefix: '/api' });
   app.register(agentCommandRoutes, { prefix: '/api' });
   app.register(dashboardRoutes, { prefix: '/api' });
