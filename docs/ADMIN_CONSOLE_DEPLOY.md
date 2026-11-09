@@ -32,11 +32,12 @@ Como root, no servidor 10.22.0.24:
 ```bash
 cd /u01/dengue-saas
 docker compose -p dengue-saas -f docker-compose.prod.yml ps
-mkdir -p /root/backups/dengue-saas
+# O filesystem / possui pouco espaço; usar /var (9,1 GB livres na última verificação).
+mkdir -p /var/backups/dengue-saas
 docker compose -p dengue-saas -f docker-compose.prod.yml exec -T postgres \
   sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' \
-  > "/root/backups/dengue-saas/pre-admin-$(date +%Y%m%d-%H%M%S).sql"
-ls -lh /root/backups/dengue-saas/
+  > "/var/backups/dengue-saas/pre-admin-$(date +%Y%m%d-%H%M%S).sql"
+ls -lh /var/backups/dengue-saas/
 git status --short
 ```
 
