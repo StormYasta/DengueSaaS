@@ -73,11 +73,24 @@ export type SensorReading = {
   payload: SensorPayload;
 };
 
+export type UserRole = 'ADMIN' | 'OPERADOR' | 'VISUALIZADOR';
+
 export type AdminUser = {
   id: string;
   username: string;
-  role: string;
+  role: UserRole;
   mustChangePassword: boolean;
+};
+
+export type ManagedUser = AdminUser & {
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type UserWithTemporaryPassword = {
+  user: ManagedUser;
+  temporaryPassword: string;
 };
 
 export type Station = {
@@ -177,6 +190,16 @@ export const api = {
   logout: () => post<{ ok: boolean }>('/auth/logout'),
   changePassword: (currentPassword: string, newPassword: string) =>
     post<{ ok: boolean }>('/auth/change-password', { currentPassword, newPassword }),
+  users: () => request<ManagedUser[]>('/admin/users'),
+  createUser: (username: string, role: UserRole) =>
+    post<UserWithTemporaryPassword>('/admin/users', { username, role }),
+  updateUser: (id: string, data: { role?: UserRole; active?: boolean }) =>
+    request<{ user: ManagedUser }>(`/admin/users/${encodeURIComponent(id)}`, {
+      method: 'PATCH', body: JSON.stringify(data),
+    }),
+  resetUserPassword: (id: string) =>
+    post<UserWithTemporaryPassword>(`/admin/users/${encodeURIComponent(id)}/reset-password`),
+
 
   dashboard: () => request<DashboardResponse>('/dashboard'),
   regions: () => request<RegionMapResponse>('/regions'),

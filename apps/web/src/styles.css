@@ -1063,3 +1063,56 @@ body[data-theme='light'] .period-custom-row input { color-scheme: light; }
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
+
+
+/* Gestão de usuários — dashboard administrativo */
+.user-management { display: grid; gap: 18px; }
+.user-management-intro { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 3px; }
+.user-management-intro h2 { margin: 8px 0; font-size: 22px; letter-spacing: -.03em; }
+.user-management-intro p { color: var(--muted); max-width: 640px; line-height: 1.6; font-size: 12px; }
+.user-create-card, .user-list-card { padding: 23px; min-width: 0; }
+.user-create-form { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 17px; }
+.user-create-form label { flex: 1 1 220px; display: flex; flex-direction: column; gap: 7px; font-size: 11px; color: var(--muted); font-weight: 650; }
+.user-create-form input, .user-create-form select, .user-role-select select {
+  border: 1px solid var(--border); border-radius: 11px; background: var(--panel-soft);
+  padding: 12px 13px; min-width: 0; color: var(--text); font-size: 12px;
+}
+.user-create-form .primary-button { min-height: 43px; }
+.user-role-guide { border-top: 1px solid var(--border); padding-top: 17px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 13px; }
+.user-role-guide > div { display: grid; gap: 5px; }
+.user-role-guide strong { font-size: 11px; color: var(--text); }
+.user-role-guide span { font-size: 11px; color: var(--muted); line-height: 1.55; }
+.user-account-list { display: grid; gap: 0; margin-top: 16px; }
+.user-account-row { border-top: 1px solid var(--border); padding: 18px 0; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.user-account-row.inactive { opacity: .76; }
+.user-account-identification { display: flex; align-items: center; gap: 11px; min-width: 195px; }
+.user-account-avatar { width: 42px; height: 42px; flex: none; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 800; font-size: 13px; }
+.user-account-identification strong { display: block; font-size: 13px; margin-bottom: 6px; overflow-wrap: anywhere; }
+.user-account-status { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.user-account-status .status-chip { font-size: 9px; padding: 4px 6px; }
+.user-password-pending, .user-current-tag { font-size: 9px; color: var(--muted); border: 1px solid var(--border); border-radius: 7px; padding: 4px 7px; }
+.user-current-tag { color: var(--accent); border-color: rgba(155,138,251,.25); }
+.user-account-controls { display: flex; align-items: flex-end; justify-content: flex-end; gap: 11px; flex-wrap: wrap; flex: 1; }
+.user-role-select { display: grid; gap: 6px; min-width: 160px; color: var(--muted); font-size: 10px; font-weight: 600; }
+.user-role-select select { padding: 10px 11px; font-weight: 700; }
+.user-account-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+.user-account-actions .outline-button { padding: 10px 11px; min-height: 40px; font-size: 11px; }
+.user-account-actions button:disabled { opacity: .4; cursor: not-allowed; }
+.temporary-credentials { padding: 20px 22px; border-color: rgba(155,138,251,.4) !important; }
+.temporary-credentials-head { display: flex; gap: 10px; align-items: flex-start; color: var(--accent); margin-bottom: 14px; }
+.temporary-credentials-head h3 { margin: 0 0 5px; color: var(--text); font-size: 16px; }
+.temporary-credentials-head p { margin: 0; color: var(--muted); line-height: 1.55; font-size: 11px; }
+.temporary-password-field { display: flex; gap: 9px; flex-wrap: wrap; }
+.temporary-password-field input { padding: 12px 14px; background: var(--panel-soft); color: var(--text); border: 1px solid var(--border); border-radius: 10px; font-family: monospace; flex: 1 1 230px; min-width: 0; }
+.temporary-credentials > .text-button { margin-top: 12px; }
+@media (max-width: 1140px) {
+  .user-account-row { align-items: flex-start; flex-direction: column; }
+  .user-account-controls { width: 100%; justify-content: flex-start; }
+}
+@media (max-width: 720px) {
+  .user-management-intro { align-items: flex-start; flex-direction: column; }
+  .user-create-form { flex-direction: column; align-items: stretch; }
+  .user-create-form label { flex: none; }
+  .user-role-guide { grid-template-columns: 1fr; }
+  .user-account-actions { width: 100%; }
+}

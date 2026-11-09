@@ -3,7 +3,7 @@ import {
   Activity, AlertTriangle, ArrowRight, Bell, ChartNoAxesCombined, CheckCircle2,
   ChevronRight, CircleHelp, CloudSun, Cpu, Database, Download, Droplets,
   LayoutDashboard, LockKeyhole, LogOut, MapPin, Menu, Moon, Power,
-  RadioTower, RefreshCw, RotateCcw, Search, Server, Settings2, ShieldCheck,
+  RadioTower, RefreshCw, RotateCcw, Search, Server, Settings2, ShieldCheck, Users,
   Sun, Thermometer, Wind, X,
 } from 'lucide-react';
 import { EnvironmentalDashboard } from './components/EnvironmentalDashboard';
@@ -12,19 +12,21 @@ import { PeriodControls } from './components/PeriodControls';
 import { MetricsChart } from './components/MetricsChart';
 import { OperationMap } from './components/OperationMap';
 import { StationTable } from './components/StationTable';
+import { UserManagement } from './components/UserManagement';
 import {
   api, ActivityEvent, AdminUser, ApiError, AnalyticsResponse, DashboardResponse, PeriodSelection, RegionMapResponse, Station, StationDetail,
 } from './services/api';
 import { formatDate, formatDuration, formatPercent, formatTemperature } from './utils/format';
 import { belongsToRegion } from './utils/regions';
 
-type Page = 'overview' | 'stations' | 'telemetry' | 'activity' | 'settings';
+type Page = 'overview' | 'stations' | 'telemetry' | 'activity' | 'users' | 'settings';
 
 const nav = [
   { key: 'overview' as Page, label: 'Visão geral', Icon: LayoutDashboard },
   { key: 'stations' as Page, label: 'Estações', Icon: RadioTower },
   { key: 'telemetry' as Page, label: 'Telemetria', Icon: ChartNoAxesCombined },
   { key: 'activity' as Page, label: 'Atividades', Icon: Activity },
+  { key: 'users' as Page, label: 'Usuários', Icon: Users },
   { key: 'settings' as Page, label: 'Configurações', Icon: Settings2 },
 ];
 
@@ -33,6 +35,7 @@ const pageTitles: Record<Page, { title: string; desc: string }> = {
   stations: { title: 'Gerenciar estações', desc: 'Status, ações remotas e exportações individuais' },
   telemetry: { title: 'Telemetria ambiental', desc: 'Medições e comportamento dos sensores em detalhe' },
   activity: { title: 'Histórico de atividades', desc: 'Auditoria de alterações e comandos administrativos' },
+  users: { title: 'Gestão de usuários', desc: 'Cadastre usuários, defina permissões e controle o acesso à plataforma' },
   settings: { title: 'Configurações', desc: 'Segurança, conta administrativa e informações da plataforma' },
 };
 
@@ -110,7 +113,7 @@ export function App() {
     let mounted = true;
     const refresh = async () => {
       try {
-        const [data, recent] = await Promise.all([api.dashboard(), api.activity()]);
+        const [data, recent] = await Promise.all([api.dashboard(), user.role === 'ADMIN' ? api.activity() : Promise.resolve([])]);
         if (mounted) {
           setDashboard(data);
           setActivity(recent);
@@ -314,6 +317,8 @@ export function App() {
     `${station.slug} ${station.name} ${station.location ?? ''}`.toLowerCase().includes(query.toLowerCase()),
   ), [dashboard, query]);
 
+  const canAdmin = user?.role === 'ADMIN';
+  const canOperate = canAdmin || user?.role === 'OPERADOR';
   const connected = dashboard?.summary.onlineCount ?? 0;
   const total = dashboard?.summary.totalStations ?? 0;
   const overviewStations = overviewStationId
@@ -348,7 +353,7 @@ export function App() {
         <label>Usuário<input autoComplete="username" required value={username} onChange={(event) => setUsername(event.target.value)} /></label>
         <label>Senha<input autoComplete="current-password" type="password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
         <button className="primary-button" type="submit" disabled={authBusy}>{authBusy ? 'Entrando...' : 'Entrar no painel'}<ArrowRight size={17}/></button>
-        <small>Primeiro acesso: admin / admin · será exigida uma nova senha.</small>
+        <small>O acesso requer uma conta cadastrada pelo administrador.</small>
       </form>
     </main>
   );
@@ -363,7 +368,7 @@ export function App() {
       </div>
       <form className="auth-panel" onSubmit={(event) => { void changePassword(event); }}>
         <h2>Alteração obrigatória de senha</h2>
-        <p>A conta admin/admin não poderá acessar o painel sem essa alteração.</p>
+        <p>Para continuar, substitua sua senha provisória por uma senha pessoal de pelo menos 12 caracteres.</p>
         {error && <div className="error-box" role="alert">{error}</div>}
         <label>Senha atual<input type="password" required value={currentPassword} autoComplete="current-password" onChange={(event) => setCurrentPassword(event.target.value)}/></label>
         <label>Nova senha (mínimo 12 caracteres)<input type="password" minLength={12} required value={newPassword} autoComplete="new-password" onChange={(event) => setNewPassword(event.target.value)}/></label>
@@ -384,7 +389,7 @@ export function App() {
         </div>
         <div className="sidebar-overline">WORKSPACE</div>
         <nav aria-label="Navegação principal">
-          {nav.map(({ key, label, Icon }) => (
+          {nav.filter(({ key }) => (key !== 'users' && key !== 'activity') || canAdmin).map(({ key, label, Icon }) => (
             <button key={key} className={`sidebar-link ${page === key ? 'active' : ''}`}
               onClick={() => { setPage(key); setMobileNav(false); }}>
               <Icon size={19}/><span>{label}</span>{page === key && <ChevronRight size={15}/>}
@@ -394,7 +399,8 @@ export function App() {
         <div className="sidebar-bottom">
           <div className="sidebar-status"><span className="pulse-dot"/><div><strong>Sistema conectado</strong><small>{connected} de {total} estações online</small></div></div>
           <button className="sidebar-profile" onClick={() => { setPage('settings'); setMobileNav(false); }}>
-            <div className="profile-avatar">AD</div><span><strong>{user.username}</strong><small>Administrador</small></span><Settings2 size={17}/>
+            <div className="profile-avatar">{user.username.slice(0, 2).toUpperCase()}</div>
+              <span><strong>{user.username}</strong><small>{user.role === 'ADMIN' ? 'Administrador' : user.role === 'OPERADOR' ? 'Operador' : 'Visualizador'}</small></span><Settings2 size={17}/>
           </button>
           <button className="sidebar-link logout-link" onClick={() => { void logout(); }}><LogOut size={18}/> Encerrar sessão</button>
         </div>
@@ -414,9 +420,9 @@ export function App() {
             <button className="icon-button" title="Alternar tema" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
               {theme === 'dark' ? <Sun size={19}/> : <Moon size={19}/>}
             </button>
-            <button className="outline-button" onClick={() => { void exportCsv(); }} disabled={busyAction === 'all'}>
+            {canOperate && <button className="outline-button" onClick={() => { void exportCsv(); }} disabled={busyAction === 'all'}>
               <Download size={17}/> Exportar tudo
-            </button>
+            </button>}
           </div>
         </header>
 
@@ -514,9 +520,9 @@ export function App() {
                   <p className="station-last">Último contato: {formatDuration(station.secondsSinceHeartbeat)}</p>
                   <div className="station-card-actions">
                     <button className="primary-button small" onClick={() => { void openStation(station.id); }}>Detalhes <ArrowRight size={15}/></button>
-                    <button className="icon-button" title="Baixar CSV da estação" onClick={() => { void exportCsv(station.id); }}><Download size={17}/></button>
-                    <button className="icon-button" title="Reiniciar coletor de sensores" disabled={station.computedStatus !== 'ONLINE'} onClick={() => { void restartStation(station, 'RESTART_COLLECTOR'); }}><RotateCcw size={17}/></button>
-                    <button className="icon-button danger-button" title="Reiniciar Raspberry Pi" disabled={station.computedStatus !== 'ONLINE' || !station.lastBootId} onClick={() => { void restartStation(station, 'REBOOT_HOST'); }}><Power size={17}/></button>
+                    {canOperate && <button className="icon-button" title="Baixar CSV da estação" onClick={() => { void exportCsv(station.id); }}><Download size={17}/></button>}
+                    {canOperate && <button className="icon-button" title="Reiniciar coletor de sensores" disabled={station.computedStatus !== 'ONLINE'} onClick={() => { void restartStation(station, 'RESTART_COLLECTOR'); }}><RotateCcw size={17}/></button>}
+                    {canAdmin && <button className="icon-button danger-button" title="Reiniciar Raspberry Pi" disabled={station.computedStatus !== 'ONLINE' || !station.lastBootId} onClick={() => { void restartStation(station, 'REBOOT_HOST'); }}><Power size={17}/></button>}
                   </div>
                 </article>
               ))}
@@ -533,7 +539,7 @@ export function App() {
                 </select>
               </label>
               {selectedStation && <div className="header-actions">
-                <button className="outline-button" onClick={() => { void exportCsv(selectedStation.id); }}><Download size={16}/> CSV da estação</button>
+                {canOperate && <button className="outline-button" onClick={() => { void exportCsv(selectedStation.id); }}><Download size={16}/> CSV da estação</button>}
                 <button className="outline-button" onClick={() => { setDetailRefresh((n) => n + 1); }}><RefreshCw size={16}/> Atualizar</button>
               </div>}
             </div>
@@ -575,7 +581,7 @@ export function App() {
                     latestAt={selectedStation.latestSensorPayloadAt}
                   />
                 </>}
-                <div className="card details-card">
+                {canAdmin && <div className="card details-card">
                   <h2>Editar estação</h2>
                   <form className="station-edit-form" onSubmit={(e) => { void saveStation(e); }}>
                     <label>Nome<input required minLength={2} value={editName} onChange={(e) => setEditName(e.target.value)}/></label>
@@ -584,13 +590,13 @@ export function App() {
                     <div className="form-row"><label>Latitude<input placeholder="-20.8339" value={lat} onChange={(e) => setLat(e.target.value)}/></label><label>Longitude<input placeholder="-49.3999" value={lon} onChange={(e) => setLon(e.target.value)}/></label></div>
                     <button className="primary-button" disabled={busyAction === 'save'} type="submit">Salvar alterações <CheckCircle2 size={16}/></button>
                   </form>
-                </div>
+                </div>}
                 <div className="card details-card">
                   <h2>Comandos remotos</h2><p className="muted">O agente executa apenas ações predefinidas. Cada comando fica registrado para auditoria.</p>
-                  <div className="command-buttons">
+                  {canOperate && <div className="command-buttons">
                     <button className="outline-button" disabled={selectedStation.computedStatus !== 'ONLINE'} onClick={() => { void restartStation(selectedStation, 'RESTART_COLLECTOR'); }}><RotateCcw size={17}/> Reiniciar coletor</button>
-                    <button className="outline-button danger-button" disabled={selectedStation.computedStatus !== 'ONLINE' || !selectedStation.lastBootId} onClick={() => { void restartStation(selectedStation, 'REBOOT_HOST'); }}><Power size={17}/> Reiniciar Raspberry</button>
-                  </div>
+                    {canAdmin && <button className="outline-button danger-button" disabled={selectedStation.computedStatus !== 'ONLINE' || !selectedStation.lastBootId} onClick={() => { void restartStation(selectedStation, 'REBOOT_HOST'); }}><Power size={17}/> Reiniciar Raspberry</button>}
+                  </div>}
                   <h3>Últimos comandos</h3>
                   <div className="command-list">
                     {selectedStation.commands?.length ? selectedStation.commands.map((cmd) => <div className="command-item" key={cmd.id}><span>{cmd.type === 'REBOOT_HOST' ? 'Reboot da Pi' : 'Reinício do coletor'}<small>{formatDate(cmd.requestedAt)}</small></span><b>{cmd.status}</b></div>) : <p className="muted">Nenhum comando enviado.</p>}
@@ -602,12 +608,13 @@ export function App() {
             </>}
           </>}
 
-          {page === 'activity' && <div className="card activity-card"><div className="section-heading"><div><h2>Trilha de auditoria</h2><p>Ações realizadas por administradores e agentes</p></div><ShieldCheck size={21}/></div>
+          {page === 'users' && canAdmin && <UserManagement currentUser={user}/>}
+          {page === 'activity' && canAdmin && <div className="card activity-card"><div className="section-heading"><div><h2>Trilha de auditoria</h2><p>Ações realizadas por administradores e agentes</p></div><ShieldCheck size={21}/></div>
             {activity.length ? activity.map((event) => <div className="activity-entry" key={event.id}><div className="activity-mark"><Activity size={16}/></div><div><strong>{event.message}</strong><p>{event.station ? `${event.station.slug} · ${event.station.name}` : 'Plataforma'} · {event.type}</p></div><time>{formatDate(event.createdAt)}</time></div>) : <div className="empty-state"><Bell size={24}/><p>Nenhuma atividade administrativa registrada ainda.</p></div>}
           </div>}
 
           {page === 'settings' && <div className="settings-grid">
-            <div className="card settings-card"><div className="settings-icon"><ShieldCheck size={23}/></div><h2>Segurança da conta</h2><p>Atualize sua senha de administrador periodicamente.</p>
+            <div className="card settings-card"><div className="settings-icon"><ShieldCheck size={23}/></div><h2>Segurança da conta</h2><p>Atualize sua senha de acesso periodicamente.</p>
               <form className="station-edit-form" onSubmit={(e) => { void changePassword(e); }}>
                 <label>Senha atual<input required type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}/></label>
                 <label>Nova senha<input required type="password" minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}/></label>
@@ -615,11 +622,11 @@ export function App() {
                 <button className="primary-button" type="submit" disabled={authBusy}>Alterar senha <ArrowRight size={16}/></button>
               </form>
             </div>
-            <div className="card settings-card"><div className="settings-icon"><Database size={23}/></div><h2>Armazenamento e exportações</h2><p>As exportações utilizam os registros ambientais que já chegaram ao banco do SaaS.</p>
+            {canOperate && <div className="card settings-card"><div className="settings-icon"><Database size={23}/></div><h2>Armazenamento e exportações</h2><p>As exportações utilizam os registros ambientais que já chegaram ao banco do SaaS.</p>
               <button className="outline-button" onClick={() => { void exportCsv(); }}><Download size={17}/> Baixar CSV consolidado</button>
               <div className="settings-info"><span>Fonte</span><strong>PostgreSQL · SENSOR_PAYLOAD</strong><span>Formato</span><strong>CSV UTF-8, separado por ponto e vírgula</strong></div>
-            </div>
-            <div className="card settings-card region-settings-card">
+            </div>}
+            {canAdmin && <div className="card settings-card region-settings-card">
               <div className="settings-icon"><MapPin size={23}/></div>
               <h2>Divisão geográfica — 10 regiões</h2>
               <p>Sobreponha os limites municipais reais ao mapa. Exporte a camada do SIG Rio Preto em GeoJSON, com coordenadas WGS84 (EPSG:4326), e importe o arquivo aqui. Não desenhamos limites estimados.</p>
@@ -645,8 +652,8 @@ export function App() {
               <p className="region-import-hint">O arquivo precisa conter as 10 regiões como polígonos, com nomes identificáveis nas propriedades. A importação substitui a malha anterior e fica registrada na auditoria.</p>
               <a className="region-source-link" href="https://sig.riopreto.sp.gov.br/portal/home/"
                 target="_blank" rel="noreferrer">Abrir SIG Rio Preto</a>
-            </div>
-            <div className="card settings-card"><div className="settings-icon"><Server size={23}/></div><h2>Ambiente</h2><p>DengueSaaS Administrative Console</p><div className="settings-info"><span>Conta</span><strong>{user.username}</strong><span>Perfil</span><strong>{user.role}</strong><span>Monitoramento</span><strong>A cada 15 segundos</strong></div></div>
+            </div>}
+            <div className="card settings-card"><div className="settings-icon"><Server size={23}/></div><h2>Ambiente</h2><p>DengueSaaS Administrative Console</p><div className="settings-info"><span>Conta</span><strong>{user.username}</strong><span>Perfil</span><strong>{user.role === 'ADMIN' ? 'Administrador' : user.role === 'OPERADOR' ? 'Operador' : 'Visualizador'}</strong><span>Monitoramento</span><strong>A cada 15 segundos</strong></div></div>
           </div>}
         </div>
       </div>

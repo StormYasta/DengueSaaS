@@ -21,8 +21,8 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(429).send({ message: 'Muitas tentativas. Tente novamente em 15 minutos.' });
     }
 
-    const user = await prisma.adminUser.findUnique({ where: { username: input.username } });
-    if (!user || !verifyPassword(input.password, user.passwordHash)) {
+    const user = await prisma.adminUser.findUnique({ where: { username: input.username.trim().toLowerCase() } });
+    if (!user || !user.active || !verifyPassword(input.password, user.passwordHash)) {
       failedLogin(request.ip);
       return reply.code(401).send({ message: 'Usuário ou senha inválidos' });
     }
@@ -58,7 +58,7 @@ export async function authRoutes(app: FastifyInstance) {
       }),
     ]);
     await prisma.event.create({
-      data: { type: 'ADMIN_PASSWORD_CHANGED', message: 'Senha do administrador alterada', severity: 'INFO' },
+      data: { type: 'ADMIN_PASSWORD_CHANGED', message: `Senha alterada pela conta ${user.username}`, severity: 'INFO' },
     });
     return { ok: true };
   });

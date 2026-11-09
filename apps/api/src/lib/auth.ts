@@ -130,10 +130,41 @@ export async function accessGuard(request: FastifyRequest, reply: FastifyReply) 
   if (!session || session.expiresAt.getTime() <= Date.now()) {
     return reply.code(401).send({ message: 'Sessão inválida ou expirada' });
   }
+  if (!session.user.active) {
+    return reply.code(403).send({ message: 'Conta desativada. Entre em contato com um administrador.' });
+  }
 
   request.adminUser = session.user;
   if (session.user.mustChangePassword &&
       !['/api/auth/me', '/api/auth/change-password', '/api/auth/logout'].includes(route)) {
     return reply.code(403).send({ code: 'PASSWORD_CHANGE_REQUIRED', message: 'Troque a senha inicial' });
   }
+
+  // Permissões sempre aplicadas na API, não apenas nos componentes React.
+  // ADMIN: acesso completo; OPERADOR: leituras, CSV e reinício de coletor;
+  // VISUALIZADOR: consulta aos dados (sem exportar nem executar comandos).
+  const role = session.user.role;
+  if (role === 'ADMIN') return;
+  if (role !== 'OPERADOR' && role !== 'VISUALIZADOR') {
+    return reply.code(403).send({ message: 'Perfil não autorizado' });
+  }
+
+  const ownAccountAction = ['/api/auth/change-password', '/api/auth/logout'].includes(route);
+  if (ownAccountAction) return;
+
+  if (route.startsWith('/api/admin/')) {
+    return reply.code(403).send({ message: 'Apenas administradores podem acessar esta área' });
+  }
+  if (route.startsWith('/api/export/') && role !== 'OPERADOR') {
+    return reply.code(403).send({ message: 'Exportação indisponível para este perfil' });
+  }
+
+  if (request.method === 'GET' || request.method === 'HEAD') return;
+  if (role === 'OPERADOR' && request.method === 'POST' &&
+      route.startsWith('/api/stations/') && route.endsWith('/restart') && route.split('/').length === 5 &&
+      request.body && typeof request.body === 'object' &&
+      (request.body as { action?: unknown }).action === 'RESTART_COLLECTOR') {
+    return;
+  }
+  return reply.code(403).send({ message: 'Seu perfil não permite esta operação' });
 }
