@@ -7,12 +7,13 @@ import {
   Sun, Thermometer, Wind, X,
 } from 'lucide-react';
 import { EnvironmentalDashboard } from './components/EnvironmentalDashboard';
+import { MeasurementCharts, formattedMeasure } from './components/MeasurementCharts';
+import { PeriodControls } from './components/PeriodControls';
 import { MetricsChart } from './components/MetricsChart';
 import { OperationMap } from './components/OperationMap';
 import { StationTable } from './components/StationTable';
-import { StatCard } from './components/StatCard';
 import {
-  api, ActivityEvent, AdminUser, ApiError, DashboardResponse, Station, StationDetail,
+  api, ActivityEvent, AdminUser, ApiError, AnalyticsResponse, DashboardResponse, PeriodSelection, Station, StationDetail,
 } from './services/api';
 import { formatDate, formatDuration, formatPercent, formatTemperature } from './utils/format';
 
@@ -56,6 +57,13 @@ export function App() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+  const [overviewPeriod, setOverviewPeriod] = useState<PeriodSelection>({ range: '24h' });
+  const [detailPeriod, setDetailPeriod] = useState<PeriodSelection>({ range: '24h' });
+  const [overviewStationId, setOverviewStationId] = useState('');
+  const [overviewAnalytics, setOverviewAnalytics] = useState<AnalyticsResponse | null>(null);
+  const [detailAnalytics, setDetailAnalytics] = useState<AnalyticsResponse | null>(null);
+  const [analyticsError, setAnalyticsError] = useState('');
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [selectedStation, setSelectedStation] = useState<StationDetail | null>(null);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [page, setPage] = useState<Page>('overview');
@@ -106,6 +114,48 @@ export function App() {
     return () => { mounted = false; window.clearInterval(timer); };
   }, [user?.id, user?.mustChangePassword]);
 
+  useEffect(() => {
+    if (!user || user.mustChangePassword || page !== 'overview') return;
+    let mounted = true;
+    setOverviewAnalytics(null);
+    setAnalyticsLoading(true);
+    setAnalyticsError('');
+    async function refresh() {
+      try {
+        const result = await api.analytics(overviewPeriod, overviewStationId || undefined);
+        if (mounted) { setOverviewAnalytics(result); setAnalyticsError(''); }
+      } catch (err) {
+        if (mounted) setAnalyticsError(err instanceof Error ? err.message : 'Falha nas médias da rede');
+      } finally {
+        if (mounted) setAnalyticsLoading(false);
+      }
+    }
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, 60_000);
+    return () => { mounted = false; window.clearInterval(timer); };
+  }, [user?.id, user?.mustChangePassword, page, overviewPeriod, overviewStationId]);
+
+  useEffect(() => {
+    if (!user || user.mustChangePassword || page !== 'telemetry' || !selectedStation) return;
+    let mounted = true;
+    setDetailAnalytics(null);
+    setAnalyticsLoading(true);
+    setAnalyticsError('');
+    async function refresh() {
+      try {
+        const result = await api.analytics(detailPeriod, selectedStation!.id);
+        if (mounted) { setDetailAnalytics(result); setAnalyticsError(''); }
+      } catch (err) {
+        if (mounted) setAnalyticsError(err instanceof Error ? err.message : 'Falha no histórico da estação');
+      } finally {
+        if (mounted) setAnalyticsLoading(false);
+      }
+    }
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, 60_000);
+    return () => { mounted = false; window.clearInterval(timer); };
+  }, [user?.id, user?.mustChangePassword, page, detailPeriod, selectedStation?.id]);
+
   async function login(event: React.FormEvent) {
     event.preventDefault();
     setAuthBusy(true); setError('');
@@ -139,6 +189,7 @@ export function App() {
   async function logout() {
     try { await api.logout(); } catch { /* sessão pode já ter expirado */ }
     setUser(null); setDashboard(null); setSelectedStation(null);
+    setOverviewAnalytics(null); setDetailAnalytics(null);
     setNotice(''); setError(''); setPage('overview');
   }
 
@@ -154,6 +205,7 @@ export function App() {
     setError('');
     try {
       const detail = await api.station(id);
+      setDetailAnalytics(null);
       setSelectedStation(detail);
       fillEditor(detail);
       setPage(nextPage);
@@ -216,12 +268,11 @@ export function App() {
 
   const connected = dashboard?.summary.onlineCount ?? 0;
   const total = dashboard?.summary.totalStations ?? 0;
-  const latestTemperatures = (dashboard?.stations ?? [])
-    .map((item) => item.latestSensorPayload?.temperatura)
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0);
-  const meanTemperature = latestTemperatures.length
-    ? (latestTemperatures.reduce((a, b) => a + b, 0) / latestTemperatures.length).toFixed(1)
-    : '—';
+  const overviewStations = overviewStationId
+    ? (dashboard?.stations ?? []).filter((item) => item.id === overviewStationId)
+    : (dashboard?.stations ?? []);
+  const overviewCity = overviewStationId === '';
+
 
   if (authChecking) return <main className="auth-screen"><div className="auth-panel">Carregando plataforma...</div></main>;
 
@@ -322,19 +373,62 @@ export function App() {
           {error && <div className="error-box" role="alert"><AlertTriangle size={17}/>{error}<button onClick={() => setError('')} aria-label="Fechar alerta"><X size={16}/></button></div>}
           {notice && <div className="notice-box" role="status"><CheckCircle2 size={17}/>{notice}<button onClick={() => setNotice('')} aria-label="Fechar aviso"><X size={16}/></button></div>}
 
+
           {page === 'overview' && <>
-            <div className="overview-intro"><div><span className="eyebrow">SITUAÇÃO DA REDE</span><h2>Seu ecossistema em tempo real</h2><p>Acompanhe a disponibilidade e o desempenho dos pontos de coleta.</p></div>
-              <div className="overview-updated"><RefreshCw size={16}/> Monitoramento ativo</div>
+            <div className="overview-intro">
+              <div><span className="eyebrow">PANORAMA CLIMÁTICO</span>
+                <h2>{overviewCity ? 'Resumo da cidade' : 'Resumo da estação'}</h2>
+                <p>{overviewCity ? 'Médias das estações monitoradas em São José do Rio Preto' : 'Indicadores da estação selecionada'}</p>
+              </div>
+              <div className="overview-updated"><RefreshCw size={16}/> Média atualizada a cada minuto</div>
             </div>
-            <section className="stats-grid">
-              <StatCard label="Estações cadastradas" value={total} hint="Dispositivos na rede"/>
-              <StatCard label="Estações online" value={connected} hint={total ? `${Math.round(connected / total * 100)}% da rede` : 'Aguardando estações'}/>
-              <StatCard label="Em atenção / offline" value={(dashboard?.stations ?? []).filter((item) => item.computedStatus !== 'ONLINE' || item.serviceStatus !== 'RUNNING').length} hint="Verifique serviços e conexões"/>
-              <StatCard label="Temperatura média" value={meanTemperature === '—' ? '—' : `${meanTemperature} °C`} hint="Última medição disponível"/>
+
+            <PeriodControls value={overviewPeriod} onChange={setOverviewPeriod}
+              stations={dashboard?.stations ?? []} stationId={overviewStationId} onStationChange={setOverviewStationId}/>
+
+            {analyticsError && <div className="error-box" role="alert"><AlertTriangle size={16}/>{analyticsError}</div>}
+
+            <div className="city-summary-head">
+              <div><span className="eyebrow">LEITURAS RECENTES</span><h2>{overviewCity ? 'Condição média da rede urbana' : 'Condição atual da estação'}</h2>
+                <p>Uma leitura recente por estação online (até 40 min); sem leituras antigas ou sensores inválidos.</p>
+              </div>
+              <div className="city-sample-badge"><RadioTower size={17}/>
+                <span><strong>{overviewAnalytics?.freshStations ?? '—'} / {overviewAnalytics?.totalStations ?? overviewStations.length}</strong>
+                  <small>estações com dados recentes</small></span>
+              </div>
+            </div>
+
+            <section className="city-summary-grid">
+              {([
+                { key: 'temperatura', title: 'Temperatura média', unit: '°C', Icon: Thermometer, color: '#ffad61' },
+                { key: 'umidade', title: 'Umidade média', unit: '%', Icon: Droplets, color: '#5aaeff' },
+                { key: 'vel_vento', title: 'Vento médio', unit: 'km/h', Icon: Wind, color: '#27cf9d' },
+                { key: 'qual_ar', title: 'Indicador do ar', unit: 'índice', Icon: Activity, color: '#b58bff' },
+              ] as const).map((indicator) => (
+                <article className="card city-summary-card" key={indicator.key}>
+                  <div className="city-card-heading"><span>{indicator.title}</span><indicator.Icon size={19} style={{ color: indicator.color }}/></div>
+                  <strong>{formattedMeasure(overviewAnalytics?.averages[indicator.key], indicator.unit)}</strong>
+                  <small>{overviewAnalytics?.samplesByMetric[indicator.key] ?? 0} estação(ões) na média</small>
+                </article>
+              ))}
             </section>
-            <OperationMap stations={dashboard?.stations ?? []} onSelect={(id) => { void openStation(id); }} />
-            <div className="section-heading"><div><h2>Estações monitoradas</h2><p>Dados operacionais e ambientais mais recentes</p></div><button className="text-button" onClick={() => setPage('stations')}>Gerenciar estações <ArrowRight size={16}/></button></div>
-            <StationTable stations={dashboard?.stations ?? []} onSelect={(id) => { void openStation(id); }}/>
+            <div className="city-summary-footnote">
+              <span><RadioTower size={15}/> {connected} online de {total} cadastradas · {(dashboard?.stations ?? []).filter((item) => item.computedStatus !== 'ONLINE' || item.serviceStatus !== 'RUNNING').length} em atenção/offline</span>
+              <span>Último dado recebido: {formatDate(overviewAnalytics?.snapshotAt)}</span>
+            </div>
+            {overviewCity && <p className="city-disclaimer">Média dos pontos instrumentados, não uma medição oficial representativa de toda a cidade. Com apenas uma estação, o resultado corresponde à leitura dela.</p>}
+
+            {analyticsLoading && !overviewAnalytics && <div className="card measurement-empty">Carregando histórico do período...</div>}
+            {overviewAnalytics && <MeasurementCharts
+              points={overviewAnalytics.series}
+              heading={overviewCity ? 'Evolução das médias entre estações' : 'Histórico da estação selecionada'}
+              description={`Período filtrado · faixas de ${overviewAnalytics.bucketMinutes} minuto(s) · cada estação tem peso igual em cada faixa.`}
+            />}
+
+            <OperationMap stations={overviewStations} onSelect={(id) => { void openStation(id); }} />
+            <div className="section-heading"><div><h2>Estações monitoradas</h2><p>Situação operacional e última leitura por estação</p></div>
+              <button className="text-button" onClick={() => setPage('stations')}>Gerenciar estações <ArrowRight size={16}/></button></div>
+            <StationTable stations={overviewStations} onSelect={(id) => { void openStation(id); }}/>
           </>}
 
           {page === 'stations' && <>
@@ -379,6 +473,8 @@ export function App() {
                 <button className="outline-button" onClick={() => { void openStation(selectedStation.id); }}><RefreshCw size={16}/> Atualizar</button>
               </div>}
             </div>
+            {selectedStation && <PeriodControls value={detailPeriod} onChange={setDetailPeriod}/>}
+            {analyticsError && <div className="error-box" role="alert"><AlertTriangle size={16}/>{analyticsError}</div>}
             {!selectedStation ? <div className="card empty-state"><ChartNoAxesCombined size={32}/><h3>Selecione uma estação</h3><p>Escolha um ponto de coleta para visualizar sensores e diagnósticos.</p></div> : <>
               <div className="station-detail-banner">
                 <div><span className="eyebrow">ESTAÇÃO {selectedStation.slug}</span><h2>{selectedStation.name}</h2>
@@ -399,8 +495,22 @@ export function App() {
                     <div><dt>Versão do agente</dt><dd>{selectedStation.agentVersion ?? '—'}</dd></div>
                   </dl>
                 </div>
-                <MetricsChart metrics={selectedStation.metrics}/>
-                <EnvironmentalDashboard readings={selectedStation.sensorReadings} latest={selectedStation.latestSensorPayload} latestAt={selectedStation.latestSensorPayloadAt}/>
+                {analyticsLoading && !detailAnalytics && <div className="card measurement-empty">Carregando telemetria do período...</div>}
+                {detailAnalytics && <>
+                  <MetricsChart metrics={detailAnalytics.systemSeries}/>
+                  <EnvironmentalDashboard
+                    readings={detailAnalytics.series.map((point) => ({
+                      id: point.at,
+                      collectedAt: point.at,
+                      payload: {
+                        temperatura: point.temperatura, umidade: point.umidade,
+                        vel_vento: point.vel_vento, qual_ar: point.qual_ar,
+                      },
+                    }))}
+                    latest={selectedStation.latestSensorPayload}
+                    latestAt={selectedStation.latestSensorPayloadAt}
+                  />
+                </>}
                 <div className="card details-card">
                   <h2>Editar estação</h2>
                   <form className="station-edit-form" onSubmit={(e) => { void saveStation(e); }}>
