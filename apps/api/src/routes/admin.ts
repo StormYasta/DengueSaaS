@@ -3,11 +3,6 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { isStationOnline } from '../lib/health.js';
 
-const coords = z.object({
-  latitude: z.number().min(-90).max(90).nullable().optional(),
-  longitude: z.number().min(-180).max(180).nullable().optional(),
-});
-
 const stationEdit = z.object({
   name: z.string().min(2).max(150).optional(),
   location: z.string().max(200).nullable().optional(),
@@ -61,7 +56,7 @@ async function streamCsv(reply: FastifyReply, stationId?: string) {
           ? event.metadata as Record<string, unknown> : {};
         const values = [
           event.station?.slug ?? '',
-          event.createdAt.toISOString(),
+          (typeof payload.collectedAt === 'string' ? payload.collectedAt : event.createdAt.toISOString()),
           ...fields.map((field) => payload[field]),
         ];
         if (!reply.raw.write(values.map(csvCell).join(';') + '\r\n')) {
