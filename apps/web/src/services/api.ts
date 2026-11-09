@@ -1,4 +1,15 @@
+import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson';
 const API_URL = import.meta.env.VITE_API_URL ?? '/api';
+
+export type RegionCollection = FeatureCollection<Polygon | MultiPolygon, { name: string }>;
+
+export type RegionMapResponse = {
+  available: boolean;
+  source: string | null;
+  updatedAt: string | null;
+  geojson: RegionCollection | null;
+  names: string[];
+};
 
 export type RangePreset = '1h' | '6h' | '12h' | '24h' | '7d' | '30d' | 'custom';
 
@@ -168,6 +179,11 @@ export const api = {
     post<{ ok: boolean }>('/auth/change-password', { currentPassword, newPassword }),
 
   dashboard: () => request<DashboardResponse>('/dashboard'),
+  regions: () => request<RegionMapResponse>('/regions'),
+  importRegions: (geojson: unknown, source: string) =>
+    post<{ ok: boolean; regionCount: number; polygonCount: number; updatedAt: string }>(
+      '/regions/import', { geojson, source },
+    ),
   analytics: (period: PeriodSelection, stationId?: string) => {
     const params = new URLSearchParams({ range: period.range });
     if (period.range === 'custom' && period.from && period.to) {
