@@ -90,7 +90,7 @@ function FitRegionBounds({ regions, selectedRegion, show }: {
       ? geojson.features.filter((feature) => feature.properties.name === selectedRegion)
       : geojson.features;
     if (!features.length) return;
-    const bounds = geoJSON({ type: 'FeatureCollection', features }).getBounds();
+    const bounds = geoJSON({ ...geojson, features }).getBounds();
     if (bounds.isValid()) map.fitBounds(bounds, { padding: [25, 25], maxZoom: 13 });
   }, [map, geojson, timestamp, selectedRegion, show]);
   return null;
