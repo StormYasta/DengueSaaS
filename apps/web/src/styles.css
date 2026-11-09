@@ -1116,3 +1116,163 @@ body[data-theme='light'] .period-custom-row input { color-scheme: light; }
   .user-role-guide { grid-template-columns: 1fr; }
   .user-account-actions { width: 100%; }
 }
+
+
+/* Dashboard de alta densidade — indicadores à esquerda, tendências à direita */
+.admin-header { padding-left: 20px; padding-right: 20px; }
+.admin-content { padding-left: 20px; padding-right: 20px; }
+
+.overview-page .admin-header { padding-top: 16px; padding-bottom: 16px; }
+.overview-page .admin-content { padding-top: 15px; }
+.overview-page .overview-intro { margin-bottom: 10px; gap: 12px; }
+.overview-page .overview-intro h2 { font-size: 20px; margin: 4px 0 3px; }
+.overview-page .overview-intro p { font-size: 11px; }
+.overview-page .overview-updated { padding: 8px 11px; }
+.overview-page .period-controls {
+  padding: 9px 12px;
+  margin-bottom: 14px;
+  border-radius: 12px !important;
+}
+.overview-page .period-main-row { column-gap: 12px; row-gap: 6px; }
+.overview-page .period-chip { padding: 7px 10px; }
+.overview-page .period-station-select select { padding: 7px 10px; }
+
+.overview-analytics-layout {
+  display: grid;
+  grid-template-columns: minmax(295px, 24%) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  min-width: 0;
+  margin-bottom: 20px;
+}
+.overview-summary-column,
+.overview-charts-column { min-width: 0; }
+.overview-summary-column .city-summary-head {
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 13px;
+}
+.overview-summary-column .city-summary-head .eyebrow { font-size: 10px; }
+.overview-summary-column .city-summary-head h2 {
+  font-size: clamp(14px, 1.15vw, 17px);
+  line-height: 1.3;
+  margin: 5px 0 0;
+}
+.overview-summary-column .city-sample-badge {
+  flex: none;
+  padding: 8px;
+  border-radius: 9px;
+  gap: 6px;
+}
+.overview-summary-column .city-sample-badge strong { font-size: 12px; }
+.overview-summary-column .city-sample-badge small { font-size: 9px; }
+.overview-summary-column .city-summary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 12px;
+}
+.overview-summary-column .city-summary-card {
+  min-width: 0;
+  min-height: 142px;
+  padding: 15px 13px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: 13px !important;
+}
+.overview-summary-column .city-card-heading {
+  gap: 5px;
+  align-items: flex-start;
+  font-size: 10px;
+  line-height: 1.35;
+}
+.overview-summary-column .city-card-heading svg { flex: none; }
+.overview-summary-column .city-summary-card > strong {
+  font-size: clamp(19px, 1.5vw, 25px);
+  margin: 10px 0 5px;
+  letter-spacing: -.04em;
+  line-height: 1.15;
+}
+.overview-summary-column .city-summary-card > small { font-size: 10px; }
+.overview-summary-column .city-summary-footnote {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0 2px;
+  font-size: 10px;
+}
+.overview-summary-column .city-disclaimer {
+  font-size: 10px;
+  line-height: 1.45;
+  margin: 11px 2px 0;
+}
+.overview-charts-column .measurement-section { margin: 0; }
+.overview-charts-column .measurement-section-heading { margin: 0 0 12px; }
+.overview-charts-column .measurement-section-heading h2 {
+  font-size: 17px;
+  line-height: 1.3;
+  margin-bottom: 5px;
+}
+.overview-charts-column .measurement-section-heading p {
+  font-size: 10px;
+  line-height: 1.35;
+}
+.measurement-section.compact .measurement-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.measurement-section.compact .measurement-card {
+  min-width: 0;
+  padding: 11px 12px 8px;
+  border-radius: 13px !important;
+}
+.measurement-compact-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 7px;
+  min-width: 0;
+}
+.measurement-compact-label { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.measurement-compact-label svg { flex: none; }
+.measurement-compact-label h3 { margin: 0; font-size: 11px; font-weight: 700; color: var(--muted); line-height: 1.3; }
+.measurement-compact-header > strong {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -.035em;
+  white-space: nowrap;
+}
+.measurement-section.compact .measurement-chart-area {
+  height: 112px;
+  width: 100%;
+  overflow: hidden;
+}
+.measurement-section.compact .measurement-note {
+  margin-top: 4px;
+  line-height: 1.2;
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 1250px) {
+  .overview-analytics-layout { grid-template-columns: minmax(250px, 30%) minmax(0, 1fr); }
+  .measurement-section.compact .measurement-grid { gap: 8px; }
+  .measurement-compact-header > strong { font-size: 15px; }
+}
+@media (max-width: 1100px) {
+  .overview-analytics-layout { grid-template-columns: 1fr; gap: 18px; }
+  .overview-summary-column .city-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .overview-summary-column .city-summary-card { min-height: 116px; }
+  .overview-summary-column .city-summary-footnote { display: flex; }
+}
+@media (max-width: 680px) {
+  .admin-header { padding-left: 14px; padding-right: 14px; }
+  .admin-content { padding-left: 14px; padding-right: 14px; }
+  .overview-page .admin-header { padding-top: 14px; padding-bottom: 14px; }
+  .overview-page .overview-intro { align-items: flex-start; flex-wrap: wrap; }
+  .overview-summary-column .city-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .measurement-section.compact .measurement-grid { grid-template-columns: 1fr; }
+  .overview-summary-column .city-summary-footnote { display: grid; }
+}
