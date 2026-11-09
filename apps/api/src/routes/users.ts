@@ -73,36 +73,49 @@ export async function userRoutes(app: FastifyInstance) {
     }).refine((input) => input.role !== undefined || input.active !== undefined,
       { message: 'Informe pelo menos uma alteração' }).parse(request.body);
 
-    const target = await prisma.adminUser.findUnique({ where: { id } });
-    if (!target) return reply.code(404).send({ message: 'Usuário não encontrado' });
-    if (target.id === request.adminUser!.id) {
-      return reply.code(400).send({ message: 'Não é possível editar seu próprio perfil por esta tela' });
-    }
+    try {
+      // Isolamento serializable impede duas sessões administrativas de
+      // rebaixarem simultaneamente os dois últimos administradores.
+      const result = await prisma.$transaction(async (tx) => {
+        const target = await tx.adminUser.findUnique({ where: { id } });
+        if (!target) return { status: 404 as const, message: 'Usuário não encontrado' };
+        if (target.id === request.adminUser!.id) {
+          return { status: 400 as const, message: 'Não é possível editar seu próprio perfil por esta tela' };
+        }
 
-    const nextRole = changes.role ?? target.role;
-    const nextActive = changes.active ?? target.active;
-    if (target.role === 'ADMIN' && target.active && (nextRole !== 'ADMIN' || !nextActive)) {
-      const admins = await prisma.adminUser.count({ where: { role: 'ADMIN', active: true } });
-      if (admins <= 1) {
-        return reply.code(409).send({ message: 'A plataforma precisa manter pelo menos um administrador ativo' });
+        const nextRole = changes.role ?? target.role;
+        const nextActive = changes.active ?? target.active;
+        if (target.role === 'ADMIN' && target.active && (nextRole !== 'ADMIN' || !nextActive)) {
+          const admins = await tx.adminUser.count({ where: { role: 'ADMIN', active: true } });
+          if (admins <= 1) {
+            return { status: 409 as const, message: 'A plataforma precisa manter pelo menos um administrador ativo' };
+          }
+        }
+
+        const user = await tx.adminUser.update({
+          where: { id }, data: changes, select: userSelect,
+        });
+        if (changes.active === false) await tx.authSession.deleteMany({ where: { userId: id } });
+        await tx.event.create({
+          data: {
+            type: 'USER_UPDATED', severity: 'INFO',
+            message: `${request.adminUser!.username} alterou a conta ${user.username}`,
+            metadata: { username: user.username, actor: request.adminUser!.username, role: user.role, active: user.active },
+          },
+        });
+        return { user };
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+      if ('status' in result && result.status) {
+        return reply.code(result.status).send({ message: result.message });
       }
+      return { user: result.user };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+        return reply.code(409).send({ message: 'Outro administrador alterou usuários ao mesmo tempo. Atualize a lista e tente novamente.' });
+      }
+      throw error;
     }
-
-    const user = await prisma.$transaction(async (tx) => {
-      const updated = await tx.adminUser.update({
-        where: { id }, data: changes, select: userSelect,
-      });
-      if (changes.active === false) await tx.authSession.deleteMany({ where: { userId: id } });
-      await tx.event.create({
-        data: {
-          type: 'USER_UPDATED', severity: 'INFO',
-          message: `${request.adminUser!.username} alterou a conta ${updated.username}`,
-          metadata: { username: updated.username, actor: request.adminUser!.username, role: updated.role, active: updated.active },
-        },
-      });
-      return updated;
-    });
-    return { user };
   });
 
   app.post('/admin/users/:id/reset-password', async (request, reply) => {
