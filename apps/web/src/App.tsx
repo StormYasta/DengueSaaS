@@ -78,7 +78,15 @@ export function App() {
   const [selectedStation, setSelectedStation] = useState<StationDetail | null>(null);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [page, setPage] = useState<Page>('overview');
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      const saved = window.localStorage.getItem('dengue-saas-theme');
+      return saved === 'light' ? 'light' : 'dark';
+    } catch {
+      // Em modo privado/restrito, o painel continua utilizável sem armazenamento.
+      return 'dark';
+    }
+  });
   const [mobileNav, setMobileNav] = useState(false);
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
@@ -92,6 +100,11 @@ export function App() {
 
   useEffect(() => {
     document.body.dataset.theme = theme;
+    try {
+      window.localStorage.setItem('dengue-saas-theme', theme);
+    } catch {
+      // O tema segue funcionando nesta sessão mesmo sem localStorage.
+    }
   }, [theme]);
 
   useEffect(() => {
