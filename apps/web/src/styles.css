@@ -870,3 +870,196 @@ body[data-theme='light'] .period-custom-row input { color-scheme: light; }
     transition: none;
   }
 }
+
+
+/* Mapa: marcadores no primeiro plano e resumo contextual por estação. */
+.map-card .leaflet-pane.leaflet-dengue-stations-pane {
+  z-index: 670;
+}
+.map-card .leaflet-pane.leaflet-dengue-regions-pane {
+  z-index: 410;
+}
+.map-card .station-status-marker {
+  cursor: pointer;
+  stroke: #fff;
+  stroke-width: 3px;
+  filter: drop-shadow(0 2px 5px rgba(19, 25, 35, .55));
+  transition: filter 160ms ease-in-out;
+}
+.map-card .station-status-marker:hover {
+  filter: drop-shadow(0 2px 8px rgba(19, 25, 35, .8));
+}
+.map-card .station-summary-popup .leaflet-popup-content-wrapper {
+  border-radius: 17px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 18px 48px rgba(2, 8, 20, .32);
+  overflow: hidden;
+}
+.map-card .station-summary-popup .leaflet-popup-content {
+  margin: 0;
+  width: auto !important;
+}
+.map-card .station-summary-popup .leaflet-popup-tip {
+  background: var(--panel);
+  border: 0;
+}
+.map-card .station-summary-popup .leaflet-popup-close-button {
+  color: var(--muted);
+  top: 11px;
+  right: 9px;
+  z-index: 2;
+  font-size: 20px;
+}
+.map-card .station-summary-popup .leaflet-popup-close-button:hover {
+  color: var(--text);
+}
+.station-map-summary {
+  width: 300px;
+  max-width: min(300px, calc(100vw - 76px));
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+}
+.station-map-summary-header {
+  padding: 19px 18px 14px;
+  padding-right: 28px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.station-map-summary-heading {
+  min-width: 0;
+}
+.station-map-summary-kicker {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: .095em;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+  margin-bottom: 5px;
+}
+.station-map-summary h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--text);
+  line-height: 1.25;
+}
+.station-map-summary-heading p {
+  display: flex;
+  gap: 5px;
+  align-items: flex-start;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.4;
+  font-size: 10px;
+}
+.station-map-summary-heading p svg {
+  flex: none;
+}
+.station-map-summary-status {
+  margin-top: 23px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.station-map-summary-status i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.station-map-summary-status.success { color: #1da66b; background: rgba(42,211,127,.12); }
+.station-map-summary-status.warning { color: #d69b2e; background: rgba(244,191,80,.15); }
+.station-map-summary-status.danger { color: #df666d; background: rgba(255,107,107,.12); }
+.station-map-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 14px 16px;
+}
+.station-map-summary-metric {
+  background: var(--panel-soft);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+.station-map-summary-metric svg {
+  display: block;
+  margin-bottom: 8px;
+}
+.station-map-summary-metric .metric-temp { color: #ffa95c; }
+.station-map-summary-metric .metric-humidity { color: #67b1ff; }
+.station-map-summary-metric .metric-wind { color: #2bcf9d; }
+.station-map-summary-metric .metric-air { color: #b995ff; }
+.station-map-summary-metric small {
+  color: var(--muted);
+  display: block;
+  font-size: 10px;
+  line-height: 1.25;
+  margin-bottom: 5px;
+}
+.station-map-summary-metric strong {
+  display: block;
+  font-size: 16px;
+  color: var(--text);
+  letter-spacing: -.035em;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.station-map-summary-meta {
+  display: grid;
+  gap: 9px;
+  padding: 0 17px 15px;
+}
+.station-map-summary-meta > div {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-size: 10px;
+  color: var(--muted);
+}
+.station-map-summary-meta > div strong {
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.station-map-summary-action {
+  width: calc(100% - 32px);
+  margin: 0 16px 16px;
+  padding: 11px 13px;
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: opacity 150ms ease-in-out;
+}
+.station-map-summary-action:hover {
+  opacity: .86;
+}
+.station-map-summary-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
