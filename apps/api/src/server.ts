@@ -30,6 +30,7 @@ if (demoMode) {
   const { adminRoutes } = await import('./routes/admin.js');
   const { agentCommandRoutes } = await import('./routes/agent-commands.js');
   const { dashboardRoutes } = await import('./routes/dashboard.js');
+  const { analyticsRoutes } = await import('./routes/analytics.js');
   const { heartbeatRoutes } = await import('./routes/heartbeats.js');
   const { logRoutes } = await import('./routes/logs.js');
   const { stationRoutes } = await import('./routes/stations.js');
@@ -38,6 +39,7 @@ if (demoMode) {
   app.register(adminRoutes, { prefix: '/api' });
   app.register(agentCommandRoutes, { prefix: '/api' });
   app.register(dashboardRoutes, { prefix: '/api' });
+  app.register(analyticsRoutes, { prefix: '/api' });
   app.register(stationRoutes, { prefix: '/api' });
   app.register(heartbeatRoutes, { prefix: '/api' });
   app.register(logRoutes, { prefix: '/api' });

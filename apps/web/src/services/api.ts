@@ -1,5 +1,45 @@
 const API_URL = import.meta.env.VITE_API_URL ?? '/api';
 
+export type RangePreset = '1h' | '6h' | '12h' | '24h' | '7d' | '30d' | 'custom';
+
+export type PeriodSelection = {
+  range: RangePreset;
+  from?: string;
+  to?: string;
+};
+
+export type EnvironmentalValues = {
+  temperatura: number | null;
+  umidade: number | null;
+  vel_vento: number | null;
+  qual_ar: number | null;
+};
+
+export type EnvironmentalPoint = EnvironmentalValues & { at: string };
+
+export type SystemPoint = {
+  at: string;
+  cpuPercent: number | null;
+  memoryPercent: number | null;
+  diskPercent: number | null;
+  temperatureCelsius: number | null;
+};
+
+export type AnalyticsResponse = {
+  period: { range: RangePreset; from: string; to: string };
+  scope: 'city' | 'station';
+  timeBasis: 'sampledAtWithReceiveFallback';
+  bucketMinutes: number;
+  totalStations: number;
+  onlineStations: number;
+  freshStations: number;
+  snapshotAt: string | null;
+  averages: EnvironmentalValues;
+  samplesByMetric: Record<keyof EnvironmentalValues, number>;
+  series: EnvironmentalPoint[];
+  systemSeries: SystemPoint[];
+};
+
 export type SensorPayload = {
   temperatura?: number | null;
   umidade?: number | null;
@@ -128,6 +168,15 @@ export const api = {
     post<{ ok: boolean }>('/auth/change-password', { currentPassword, newPassword }),
 
   dashboard: () => request<DashboardResponse>('/dashboard'),
+  analytics: (period: PeriodSelection, stationId?: string) => {
+    const params = new URLSearchParams({ range: period.range });
+    if (period.range === 'custom' && period.from && period.to) {
+      params.set('from', period.from);
+      params.set('to', period.to);
+    }
+    if (stationId) params.set('stationId', stationId);
+    return request<AnalyticsResponse>(`/analytics?${params.toString()}`);
+  },
   station: (id: string) => request<StationDetail>(`/stations/${encodeURIComponent(id)}`),
   activity: () => request<ActivityEvent[]>('/admin/activity?limit=40'),
   saveStation: (id: string, data: {
