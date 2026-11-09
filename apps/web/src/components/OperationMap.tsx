@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { geoJSON } from 'leaflet';
 import type { Feature } from 'geojson';
 import { Layers3, MapPinned } from 'lucide-react';
 import {
@@ -57,28 +58,41 @@ function formatWind(value?: number | null) {
   return `${value.toFixed(1)} km/h`;
 }
 
-function FitMapBounds({ stations }: { stations: Station[] }) {
+function FitMapBounds({ stations, skip }: { stations: Station[]; skip: boolean }) {
   const map = useMap();
-  const points = stations
-    .filter(
-      (station) =>
-        typeof station.latitude === 'number' &&
-        typeof station.longitude === 'number',
-    )
-    .map(
-      (station) =>
-        [station.latitude as number, station.longitude as number] as [
-          number,
-          number,
-        ],
-    );
+  const signature = stations
+    .filter((station) => typeof station.latitude === 'number' && typeof station.longitude === 'number')
+    .map((station) => `${station.latitude},${station.longitude}`)
+    .sort().join('|');
 
-  if (points.length > 1) {
-    window.setTimeout(() => {
-      map.fitBounds(points, { padding: [34, 34], maxZoom: 13 });
-    }, 0);
-  }
+  useEffect(() => {
+    if (skip) return;
+    const points = signature.split('|').filter(Boolean).map((point) =>
+      point.split(',').map(Number) as [number, number]);
+    if (points.length > 1) map.fitBounds(points, { padding: [34, 34], maxZoom: 13 });
+  }, [map, signature, skip]);
 
+  return null;
+}
+
+function FitRegionBounds({ regions, selectedRegion, show }: {
+  regions?: RegionMapResponse | null;
+  selectedRegion: string;
+  show: boolean;
+}) {
+  const map = useMap();
+  const geojson = regions?.geojson;
+  const timestamp = regions?.updatedAt;
+
+  useEffect(() => {
+    if (!geojson || !show) return;
+    const features = selectedRegion
+      ? geojson.features.filter((feature) => feature.properties.name === selectedRegion)
+      : geojson.features;
+    if (!features.length) return;
+    const bounds = geoJSON({ type: 'FeatureCollection', features }).getBounds();
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [25, 25], maxZoom: 13 });
+  }, [map, geojson, timestamp, selectedRegion, show]);
   return null;
 }
 
@@ -115,7 +129,10 @@ export function OperationMap({
             <span><i className="dot danger" /> Offline</span>
           </div>
           {hasRegions && <button type="button" className={`map-layer-switch ${showRegions ? 'active' : ''}`}
-            aria-pressed={showRegions} onClick={() => setShowRegions(!showRegions)}>
+            aria-pressed={showRegions} onClick={() => {
+              if (showRegions && selectedRegion && onRegionSelect) onRegionSelect('');
+              setShowRegions(!showRegions);
+            }}>
             <Layers3 size={16} /> {showRegions ? 'Ocultar regiões' : 'Mostrar regiões'}
           </button>}
           {hasRegions && onRegionSelect && <label className="map-region-picker">
@@ -140,7 +157,8 @@ export function OperationMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          <FitMapBounds stations={mappedStations} />
+          <FitMapBounds stations={mappedStations} skip={showRegions && hasRegions}/>
+          <FitRegionBounds regions={regions} selectedRegion={selectedRegion} show={showRegions}/>
 
           {showRegions && polygons && <GeoJSON
             key={`${regions?.updatedAt ?? ''}-${selectedRegion}`}
