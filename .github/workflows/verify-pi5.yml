@@ -2,19 +2,24 @@ name: Verify Pi5 monitoring integration
 
 on:
   pull_request:
-    branches: [main, feat/estacao-pi5-monitoramento-20261106, feat/admin-console-20261109, feat/analytics-cidade-filtros-20261109, feat/mapa-regioes-riopreto-20261109, feat/mapa-offwhite-20261109, feat/mapa-expandir-altura-20261109, feat/mapa-estacoes-card-20261109, feat/gestao-usuarios-permissoes-20261109, fix/tema-persistente-20261109, feat/dashboard-denso-20261109]
+    branches: [main, feat/estacao-pi5-monitoramento-20261106, feat/admin-console-20261109, feat/analytics-cidade-filtros-20261109, feat/mapa-regioes-riopreto-20261109, feat/mapa-offwhite-20261109, feat/mapa-expandir-altura-20261109, feat/mapa-estacoes-card-20261109, feat/gestao-usuarios-permissoes-20261109, fix/tema-persistente-20261109]
   push:
     branches: ['feat/**', 'fix/**', 'feat/analytics-cidade-filtros-20261109', 'feat/mapa-regioes-riopreto-20261109', 'feat/mapa-offwhite-20261109']
 
 jobs:
-  agent:
+  api:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: '3.11'
-      - run: python -m py_compile agent/station_agent.py
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npx prisma generate
+      - run: npm run build
 
   web:
     runs-on: ubuntu-latest
@@ -29,16 +34,11 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run build
 
-  api:
+  agent:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/api
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: '22'
-      - run: npm install --no-audit --no-fund
-      - run: npx prisma generate
-      - run: npm run build
+          python-version: '3.11'
+      - run: python -m py_compile agent/station_agent.py
