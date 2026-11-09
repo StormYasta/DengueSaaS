@@ -25,7 +25,7 @@ SERVICE_NAME = os.getenv("SERVICE_NAME", "estacao.service")
 COLLECTOR_PROCESS_MATCH = os.getenv("COLLECTOR_PROCESS_MATCH", "").strip()
 HEARTBEAT_INTERVAL_SECONDS = max(10, int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "30")))
 SAAS_TIMEOUT_SECONDS = max(1, int(os.getenv("SAAS_TIMEOUT_SECONDS", "10")))
-AGENT_VERSION = "1.2.0"
+AGENT_VERSION = "2.0.0"
 
 # O coletor existente permanece responsável por GPIO, CSV e publicação Dojot.
 # Configure UMA origem de dados para acrescentar leituras meteorológicas ao heartbeat.
@@ -161,6 +161,68 @@ def latest_sensor_reading():
         return None, None
 
 
+def read_boot_id():
+    try:
+        return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    except OSError:
+        return None
+
+
+def report_command(session, command_id, status, message=""):
+    response = session.post(
+        f"{API_URL}/agent/commands/{command_id}/result",
+        json={"stationSlug": STATION_SLUG, "status": status, "result": message[:1000]},
+        timeout=SAAS_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+
+
+def poll_commands(session):
+    if not API_KEY:
+        return
+    response = session.get(
+        f"{API_URL}/agent/commands",
+        params={"stationSlug": STATION_SLUG},
+        timeout=SAAS_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    command = response.json().get("command")
+    if not command:
+        return
+
+    command_id = command["id"]
+    kind = command.get("type")
+    if kind not in {"RESTART_COLLECTOR", "REBOOT_HOST"}:
+        report_command(session, command_id, "FAILED", "Tipo de comando não permitido")
+        return
+
+    try:
+        if kind == "RESTART_COLLECTOR":
+            if not SERVICE_NAME or not SERVICE_NAME.endswith(".service"):
+                raise ValueError("SERVICE_NAME inválido")
+            result = subprocess.run(
+                ["sudo", "-n", "/usr/bin/systemctl", "restart", SERVICE_NAME],
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            if result.returncode:
+                raise RuntimeError(result.stderr.strip()[:500] or f"systemctl retornou {result.returncode}")
+            report_command(session, command_id, "SUCCESS", "Serviço de coleta reiniciado")
+            print("[SAAS] Coletor reiniciado pelo comando remoto", flush=True)
+        elif kind == "REBOOT_HOST":
+            # RUNNING não significa sucesso: o servidor só confirma com outro bootId.
+            report_command(session, command_id, "RUNNING", "Aguardando o retorno da Raspberry")
+            subprocess.run(
+                ["sudo", "-n", "/usr/bin/systemctl", "reboot"],
+                capture_output=True, text=True, timeout=15, check=True,
+            )
+    except Exception as exc:
+        print(f"[SAAS] Falha ao executar {kind}: {exc}", flush=True)
+        try:
+            report_command(session, command_id, "FAILED", str(exc))
+        except requests.RequestException:
+            pass
+
+
 def collect_heartbeat(last_collection_at, new_payload):
     data = {
         "stationSlug": STATION_SLUG,
@@ -174,10 +236,13 @@ def collect_heartbeat(last_collection_at, new_payload):
         "diskPercent": psutil.disk_usage("/").percent,
         "temperatureCelsius": get_cpu_temperature(),
         "uptimeSeconds": int(time.time() - psutil.boot_time()),
+        "bootId": read_boot_id(),
         "recordsLast24h": 0,
     }
     if data["ipAddress"] is None:
         del data["ipAddress"]
+    if data["bootId"] is None:
+        del data["bootId"]
     if last_collection_at:
         data["lastCollectionAt"] = last_collection_at
     if new_payload:
@@ -207,6 +272,7 @@ def main():
             if has_new_reading:
                 last_sent_reading = timestamp
             print(f"[SAAS] Heartbeat OK ({response.status_code}); sensor_novo={has_new_reading}", flush=True)
+            poll_commands(session)
         except (requests.RequestException, OSError) as exc:
             print(f"[SAAS] Falha na comunicação: {exc}", flush=True)
 

@@ -10,7 +10,8 @@ WorkingDirectory=/opt/dengue-saas-agent/agent
 ExecStart=/opt/dengue-saas-agent/agent/.venv/bin/python /opt/dengue-saas-agent/agent/station_agent.py
 Restart=always
 RestartSec=10
-NoNewPrivileges=true
+# O agente usa sudo -n apenas para operações explicitamente permitidas
+# em /etc/sudoers.d/dengue-saas-agent. NoNewPrivileges=true impediria o sudo.
 
 [Install]
 WantedBy=multi-user.target

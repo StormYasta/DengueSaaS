@@ -2,9 +2,9 @@ name: Verify Pi5 monitoring integration
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/estacao-pi5-monitoramento-20261106]
   push:
-    branches: [feat/estacao-pi5-monitoramento-20261106]
+    branches: ['feat/**']
 
 jobs:
   api:

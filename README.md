@@ -104,10 +104,19 @@ gerado pelo coletor. Configure `agent/.env.monitor.example` e instale
 A nova instalação é destinada ao servidor `10.22.0.24`, no diretório
 `/u01/dengue-saas`. A porta `8090` é sugerida e precisa ser verificada
 antes da instalação; não alterar os containers Dojot em `/u01/docker-compose`. As coordenadas são mantidas
-manualmente no painel, com chave `ADMIN_API_KEY`, e não são atualizadas
-pelos heartbeats.
+manualmente no painel, após login, e não são atualizadas\npelos heartbeats.
 
 Procedimento detalhado: [Integração Pi 5](docs/INTEGRACAO_PI5_2026-11.md).
+
+## Console administrativa
+
+Nova interface com login inicial `admin/admin` (troca de senha obrigatória),
+sidebar, mapa, gerenciamento das estações, exportações CSV individuais e
+consolidadas, comandos de reinício do coletor e da Raspberry e auditoria.
+
+Não exponha a porta HTTP 8090 publicamente sem HTTPS/VPN e proteção de acesso.
+A instalação no servidor `10.22.0.24` é feita conforme
+[guia de deploy administrativo](docs/ADMIN_CONSOLE_DEPLOY.md).
 
 ## MVP implementado
 

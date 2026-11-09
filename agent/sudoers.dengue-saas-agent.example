@@ -1,0 +1,4 @@
+# Exemplo para a E01 (instalar em /etc/sudoers.d/dengue-saas-agent)
+# Somente evandro pode reiniciar o serviço da coleta e a própria Raspberry.
+# Não libera shell, sudo geral, execução arbitrária ou alteração de serviços.
+evandro ALL=(root) NOPASSWD: /usr/bin/systemctl restart estacao-dengue.service, /usr/bin/systemctl reboot
