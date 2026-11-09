@@ -329,7 +329,7 @@ export function App() {
             <section className="stats-grid">
               <StatCard label="Estações cadastradas" value={total} hint="Dispositivos na rede"/>
               <StatCard label="Estações online" value={connected} hint={total ? `${Math.round(connected / total * 100)}% da rede` : 'Aguardando estações'}/>
-              <StatCard label="Em atenção / offline" value={(dashboard?.summary.offlineCount ?? 0) + (dashboard?.summary.serviceProblems ?? 0)} hint="Verifique serviços e conexões"/>
+              <StatCard label="Em atenção / offline" value={(dashboard?.stations ?? []).filter((item) => item.computedStatus !== 'ONLINE' || item.serviceStatus !== 'RUNNING').length} hint="Verifique serviços e conexões"/>
               <StatCard label="Temperatura média" value={meanTemperature === '—' ? '—' : `${meanTemperature} °C`} hint="Última medição disponível"/>
             </section>
             <OperationMap stations={dashboard?.stations ?? []} onSelect={(id) => { void openStation(id); }} />
