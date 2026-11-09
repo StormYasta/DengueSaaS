@@ -35,6 +35,7 @@ const heartbeatSchema = z.object({
   diskPercent: z.number().min(0).max(100),
   temperatureCelsius: z.number().optional().nullable(),
   uptimeSeconds: z.number().int().nonnegative().optional(),
+  bootId: z.string().uuid().optional(),
   lastCollectionAt: z.coerce.date().optional().nullable(),
   recordsLast24h: z.number().int().nonnegative().default(0),
   sensorPayload: sensorPayloadSchema.optional(),
@@ -47,6 +48,7 @@ export async function heartbeatRoutes(app: FastifyInstance) {
     }
     const body = heartbeatSchema.parse(request.body);
     const now = new Date();
+    const previous = await prisma.station.findUnique({ where: { slug: body.stationSlug }, select: { lastBootId: true, serviceStatus: true } });
 
     const station = await prisma.station.upsert({
       where: { slug: body.stationSlug },
@@ -67,6 +69,7 @@ export async function heartbeatRoutes(app: FastifyInstance) {
         lastDiskPercent: body.diskPercent,
         lastTemperatureCelsius: body.temperatureCelsius ?? null,
         uptimeSeconds: body.uptimeSeconds,
+        lastBootId: body.bootId ?? null,
       },
       update: {
         location: body.location,
@@ -81,6 +84,7 @@ export async function heartbeatRoutes(app: FastifyInstance) {
         lastDiskPercent: body.diskPercent,
         lastTemperatureCelsius: body.temperatureCelsius ?? null,
         uptimeSeconds: body.uptimeSeconds,
+        lastBootId: body.bootId ?? undefined,
       },
     });
 
@@ -125,7 +129,21 @@ export async function heartbeatRoutes(app: FastifyInstance) {
       });
     }
 
-    if (body.serviceStatus !== ServiceStatus.RUNNING) {
+    // Confirma reinicialização física apenas quando a Raspberry retorna com
+    // identificador de boot diferente (não confundir com comando enviado).
+    if (previous?.lastBootId && body.bootId && previous.lastBootId !== body.bootId) {
+      const completed = await prisma.command.updateMany({
+        where: { stationId: station.id, type: 'REBOOT_HOST', status: 'RUNNING' },
+        data: { status: 'SUCCESS', finishedAt: now, result: 'Novo bootId confirmado em heartbeat' },
+      });
+      if (completed.count > 0) {
+        await prisma.event.create({
+          data: { stationId: station.id, severity: 'INFO', type: 'REBOOT_COMPLETED', message: 'Raspberry reiniciou e voltou a comunicar' },
+        });
+      }
+    }
+
+    if (body.serviceStatus !== ServiceStatus.RUNNING && previous?.serviceStatus !== body.serviceStatus) {
       await prisma.event.create({
         data: {
           stationId: station.id,
