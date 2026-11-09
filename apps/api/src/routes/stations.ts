@@ -112,7 +112,8 @@ export async function stationRoutes(app: FastifyInstance) {
     const sensorReadings = sensorEvents
       .map((event) => ({
         id: event.id,
-        collectedAt: event.createdAt,
+        collectedAt: event.metadata && typeof event.metadata === 'object' && !Array.isArray(event.metadata) && typeof (event.metadata as Record<string, unknown>).collectedAt === 'string'
+          ? (event.metadata as Record<string, unknown>).collectedAt as string : event.createdAt,
         payload: event.metadata,
       }))
       .reverse();
