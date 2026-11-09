@@ -28,7 +28,7 @@ export type SystemPoint = {
 export type AnalyticsResponse = {
   period: { range: RangePreset; from: string; to: string };
   scope: 'city' | 'station';
-  timeBasis: 'receivedAt';
+  timeBasis: 'sampledAtWithReceiveFallback';
   bucketMinutes: number;
   totalStations: number;
   onlineStations: number;
