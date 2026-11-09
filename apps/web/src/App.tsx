@@ -353,7 +353,7 @@ export function App() {
         <label>Usuário<input autoComplete="username" required value={username} onChange={(event) => setUsername(event.target.value)} /></label>
         <label>Senha<input autoComplete="current-password" type="password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
         <button className="primary-button" type="submit" disabled={authBusy}>{authBusy ? 'Entrando...' : 'Entrar no painel'}<ArrowRight size={17}/></button>
-        <small>Primeiro acesso: admin / admin · será exigida uma nova senha.</small>
+        <small>O acesso requer uma conta cadastrada pelo administrador.</small>
       </form>
     </main>
   );
@@ -368,7 +368,7 @@ export function App() {
       </div>
       <form className="auth-panel" onSubmit={(event) => { void changePassword(event); }}>
         <h2>Alteração obrigatória de senha</h2>
-        <p>A conta admin/admin não poderá acessar o painel sem essa alteração.</p>
+        <p>Para continuar, substitua sua senha provisória por uma senha pessoal de pelo menos 12 caracteres.</p>
         {error && <div className="error-box" role="alert">{error}</div>}
         <label>Senha atual<input type="password" required value={currentPassword} autoComplete="current-password" onChange={(event) => setCurrentPassword(event.target.value)}/></label>
         <label>Nova senha (mínimo 12 caracteres)<input type="password" minLength={12} required value={newPassword} autoComplete="new-password" onChange={(event) => setNewPassword(event.target.value)}/></label>
@@ -614,7 +614,7 @@ export function App() {
           </div>}
 
           {page === 'settings' && <div className="settings-grid">
-            <div className="card settings-card"><div className="settings-icon"><ShieldCheck size={23}/></div><h2>Segurança da conta</h2><p>Atualize sua senha de administrador periodicamente.</p>
+            <div className="card settings-card"><div className="settings-icon"><ShieldCheck size={23}/></div><h2>Segurança da conta</h2><p>Atualize sua senha de acesso periodicamente.</p>
               <form className="station-edit-form" onSubmit={(e) => { void changePassword(e); }}>
                 <label>Senha atual<input required type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}/></label>
                 <label>Nova senha<input required type="password" minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}/></label>
