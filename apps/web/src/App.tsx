@@ -1,194 +1,454 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, Moon, Search, Sun } from 'lucide-react';
+import {
+  Activity, AlertTriangle, ArrowRight, Bell, ChartNoAxesCombined, CheckCircle2,
+  ChevronRight, CircleHelp, CloudSun, Cpu, Database, Download, Droplets,
+  LayoutDashboard, LockKeyhole, LogOut, MapPin, Menu, Moon, Power,
+  RadioTower, RefreshCw, RotateCcw, Search, Server, Settings2, ShieldCheck,
+  Sun, Thermometer, Wind, X,
+} from 'lucide-react';
+import { EnvironmentalDashboard } from './components/EnvironmentalDashboard';
 import { MetricsChart } from './components/MetricsChart';
 import { OperationMap } from './components/OperationMap';
-import { StatCard } from './components/StatCard';
 import { StationTable } from './components/StationTable';
-import { EnvironmentalDashboard } from './components/EnvironmentalDashboard';
-import { api, DashboardResponse, StationDetail } from './services/api';
+import { StatCard } from './components/StatCard';
+import {
+  api, ActivityEvent, AdminUser, ApiError, DashboardResponse, Station, StationDetail,
+} from './services/api';
 import { formatDate, formatDuration, formatPercent, formatTemperature } from './utils/format';
 
+type Page = 'overview' | 'stations' | 'telemetry' | 'activity' | 'settings';
+
+const nav = [
+  { key: 'overview' as Page, label: 'Visão geral', Icon: LayoutDashboard },
+  { key: 'stations' as Page, label: 'Estações', Icon: RadioTower },
+  { key: 'telemetry' as Page, label: 'Telemetria', Icon: ChartNoAxesCombined },
+  { key: 'activity' as Page, label: 'Atividades', Icon: Activity },
+  { key: 'settings' as Page, label: 'Configurações', Icon: Settings2 },
+];
+
+const pageTitles: Record<Page, { title: string; desc: string }> = {
+  overview: { title: 'Central de monitoramento', desc: 'Visão operacional das estações meteorológicas conectadas' },
+  stations: { title: 'Gerenciar estações', desc: 'Status, ações remotas e exportações individuais' },
+  telemetry: { title: 'Telemetria ambiental', desc: 'Medições e comportamento dos sensores em detalhe' },
+  activity: { title: 'Histórico de atividades', desc: 'Auditoria de alterações e comandos administrativos' },
+  settings: { title: 'Configurações', desc: 'Segurança, conta administrativa e informações da plataforma' },
+};
+
+function statusText(station: Station) {
+  if (station.computedStatus !== 'ONLINE') return 'Offline';
+  if (station.serviceStatus !== 'RUNNING') return 'Atenção';
+  return 'Online';
+}
+
+function statusClass(station: Station) {
+  if (station.computedStatus !== 'ONLINE') return 'danger';
+  if (station.serviceStatus !== 'RUNNING') return 'warning';
+  return 'success';
+}
+
 export function App() {
+  const [user, setUser] = useState<AdminUser | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [selectedStation, setSelectedStation] = useState<StationDetail | null>(null);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [page, setPage] = useState<Page>('overview');
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [mobileNav, setMobileNav] = useState(false);
   const [query, setQuery] = useState('');
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
-  const [error, setError] = useState<string | null>(null);
-  const [latitudeInput, setLatitudeInput] = useState('');
-  const [longitudeInput, setLongitudeInput] = useState('');
-  const [adminKey, setAdminKey] = useState('');
-  const [locationSaving, setLocationSaving] = useState(false);
-  const [locationMessage, setLocationMessage] = useState<string | null>(null);
-
-  async function loadDashboard() {
-    try {
-      setError(null);
-      const data = await api.dashboard();
-      setDashboard(data);
-
-      if (selectedStation) {
-        const detail = await api.station(selectedStation.id);
-        setSelectedStation(detail);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro desconhecido');
-    }
-  }
-
-  async function selectStation(id: string) {
-    const detail = await api.station(id);
-    setSelectedStation(detail);
-    setLatitudeInput(detail.latitude?.toString() ?? '');
-    setLongitudeInput(detail.longitude?.toString() ?? '');
-    setLocationMessage(null);
-  }
-
-  async function saveLocation() {
-    if (!selectedStation) return;
-    const latText = latitudeInput.trim().replace(',', '.');
-    const lonText = longitudeInput.trim().replace(',', '.');
-    const clearing = latText === '' && lonText === '';
-    const latitude = clearing ? null : Number(latText);
-    const longitude = clearing ? null : Number(lonText);
-    if ((!clearing && (!latText || !lonText || !Number.isFinite(latitude) || !Number.isFinite(longitude))) ||
-        (latitude !== null && (latitude < -90 || latitude > 90)) ||
-        (longitude !== null && (longitude < -180 || longitude > 180))) {
-      setLocationMessage('Informe latitude (-90 a 90) e longitude (-180 a 180), ou deixe ambas vazias.');
-      return;
-    }
-    setLocationSaving(true);
-    try {
-      const updated = await api.updateCoordinates(selectedStation.id, latitude, longitude, adminKey);
-      setSelectedStation((current) => current && current.id === updated.id
-        ? { ...current, latitude: updated.latitude, longitude: updated.longitude }
-        : current);
-      setLocationMessage('Coordenadas atualizadas. O mapa usará a posição cadastrada.');
-      await loadDashboard();
-    } catch (err) {
-      setLocationMessage(err instanceof Error ? err.message : 'Erro ao salvar coordenadas.');
-    } finally {
-      setLocationSaving(false);
-    }
-  }
-
-  useEffect(() => {
-    loadDashboard();
-    const interval = window.setInterval(loadDashboard, 10000);
-    return () => window.clearInterval(interval);
-  }, []);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [lat, setLat] = useState('');
+  const [lon, setLon] = useState('');
 
   useEffect(() => {
     document.body.dataset.theme = theme;
   }, [theme]);
 
-  const filteredStations = useMemo(() => {
-    const stations = dashboard?.stations ?? [];
-    return stations.filter((station) => {
-      const target = `${station.name} ${station.slug} ${station.location ?? ''}`.toLowerCase();
-      return target.includes(query.toLowerCase());
-    });
-  }, [dashboard, query]);
+  useEffect(() => {
+    api.me().then(({ user: logged }) => setUser(logged))
+      .catch(() => setUser(null))
+      .finally(() => setAuthChecking(false));
+  }, []);
+
+  useEffect(() => {
+    if (!user || user.mustChangePassword) return;
+    let mounted = true;
+    const refresh = async () => {
+      try {
+        const [data, recent] = await Promise.all([api.dashboard(), api.activity()]);
+        if (mounted) {
+          setDashboard(data);
+          setActivity(recent);
+          setError('');
+        }
+      } catch (err) {
+        if (!mounted) return;
+        if (err instanceof ApiError && err.status === 401) {
+          setUser(null);
+        } else {
+          setError(err instanceof Error ? err.message : 'Falha ao atualizar dashboard');
+        }
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, 15000);
+    return () => { mounted = false; window.clearInterval(timer); };
+  }, [user?.id, user?.mustChangePassword]);
+
+  async function login(event: React.FormEvent) {
+    event.preventDefault();
+    setAuthBusy(true); setError('');
+    try {
+      const result = await api.login(username, password);
+      setUser(result.user);
+      setCurrentPassword(password);
+      setPassword('');
+      setNotice('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha no login');
+    } finally { setAuthBusy(false); }
+  }
+
+  async function changePassword(event: React.FormEvent) {
+    event.preventDefault();
+    if (newPassword !== confirmPassword) { setError('As senhas novas não coincidem.'); return; }
+    if (newPassword.length < 12) { setError('Use pelo menos 12 caracteres.'); return; }
+    setAuthBusy(true); setError('');
+    try {
+      await api.changePassword(currentPassword, newPassword);
+      const result = await api.me();
+      setUser(result.user);
+      setNewPassword(''); setConfirmPassword(''); setCurrentPassword('');
+      setNotice('Senha atualizada com sucesso.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível alterar a senha');
+    } finally { setAuthBusy(false); }
+  }
+
+  async function logout() {
+    try { await api.logout(); } catch { /* sessão pode já ter expirado */ }
+    setUser(null); setDashboard(null); setSelectedStation(null);
+    setNotice(''); setError(''); setPage('overview');
+  }
+
+  function fillEditor(detail: StationDetail) {
+    setEditName(detail.name);
+    setEditLocation(detail.location ?? '');
+    setEditDescription(detail.description ?? '');
+    setLat(detail.latitude?.toString() ?? '');
+    setLon(detail.longitude?.toString() ?? '');
+  }
+
+  async function openStation(id: string, nextPage: Page = 'telemetry') {
+    setError('');
+    try {
+      const detail = await api.station(id);
+      setSelectedStation(detail);
+      fillEditor(detail);
+      setPage(nextPage);
+      setMobileNav(false);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Erro ao carregar estação'); }
+  }
+
+  async function saveStation(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedStation) return;
+    const latText = lat.trim().replace(',', '.');
+    const lonText = lon.trim().replace(',', '.');
+    const latitude = latText === '' ? null : Number(latText);
+    const longitude = lonText === '' ? null : Number(lonText);
+    if ((latitude === null) !== (longitude === null) ||
+      (latitude !== null && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) ||
+      (longitude !== null && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180))) {
+      setError('Informe ambas as coordenadas válidas, ou deixe as duas vazias.');
+      return;
+    }
+    setBusyAction('save');
+    try {
+      await api.saveStation(selectedStation.id, {
+        name: editName, location: editLocation, description: editDescription,
+        latitude, longitude,
+      });
+      await openStation(selectedStation.id, page);
+      const data = await api.dashboard();
+      setDashboard(data);
+      setNotice('Cadastro da estação atualizado.');
+    } catch (err) { setError(err instanceof Error ? err.message : 'Erro ao salvar'); }
+    finally { setBusyAction(null); }
+  }
+
+  async function exportCsv(id?: string) {
+    setBusyAction(id ?? 'all'); setError('');
+    try { await api.downloadCsv(id); setNotice('Exportação CSV iniciada.'); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Erro na exportação'); }
+    finally { setBusyAction(null); }
+  }
+
+  async function restartStation(station: Station, action: 'RESTART_COLLECTOR' | 'REBOOT_HOST') {
+    const fullReboot = action === 'REBOOT_HOST';
+    const message = fullReboot
+      ? `Reiniciar completamente a Raspberry da estação ${station.slug}? As medições e a conexão MQTT serão interrompidas durante o reboot.`
+      : `Reiniciar apenas o serviço coletor da estação ${station.slug}? A coleta será interrompida por alguns instantes.`;
+    if (!window.confirm(message)) return;
+    setBusyAction(station.id + action); setError('');
+    try {
+      await api.restart(station.id, action);
+      setNotice(`Comando solicitado para ${station.slug}. Aguarde o agente confirmar a execução.`);
+      if (selectedStation?.id === station.id) await openStation(station.id, page);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Não foi possível solicitar o comando'); }
+    finally { setBusyAction(null); }
+  }
+
+  const filtered = useMemo(() => (dashboard?.stations ?? []).filter((station) =>
+    `${station.slug} ${station.name} ${station.location ?? ''}`.toLowerCase().includes(query.toLowerCase()),
+  ), [dashboard, query]);
+
+  const connected = dashboard?.summary.onlineCount ?? 0;
+  const total = dashboard?.summary.totalStations ?? 0;
+  const latestTemperatures = (dashboard?.stations ?? [])
+    .map((item) => item.latestSensorPayload?.temperatura)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0);
+  const meanTemperature = latestTemperatures.length
+    ? (latestTemperatures.reduce((a, b) => a + b, 0) / latestTemperatures.length).toFixed(1)
+    : '—';
+
+  if (authChecking) return <main className="auth-screen"><div className="auth-panel">Carregando plataforma...</div></main>;
+
+  if (!user) return (
+    <main className="auth-screen">
+      <div className="auth-brand">
+        <div className="brand-glyph"><CloudSun size={36} /></div>
+        <span className="eyebrow">Gestão de estações IoT</span>
+        <h1>Dengue<span>SaaS</span></h1>
+        <p>Uma central para monitorar, administrar e acompanhar sua rede meteorológica em tempo real.</p>
+        <div className="auth-highlights">
+          <span><ShieldCheck size={17}/> Acesso protegido</span>
+          <span><RadioTower size={17}/> Gestão centralizada</span>
+          <span><ChartNoAxesCombined size={17}/> Telemetria ambiental</span>
+        </div>
+      </div>
+      <form className="auth-panel" onSubmit={(event) => { void login(event); }}>
+        <div className="auth-icon"><LockKeyhole size={22}/></div>
+        <h2>Entrar na plataforma</h2>
+        <p>Use sua conta administrativa para continuar.</p>
+        {error && <div className="error-box" role="alert">{error}</div>}
+        <label>Usuário<input autoComplete="username" required value={username} onChange={(event) => setUsername(event.target.value)} /></label>
+        <label>Senha<input autoComplete="current-password" type="password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+        <button className="primary-button" type="submit" disabled={authBusy}>{authBusy ? 'Entrando...' : 'Entrar no painel'}<ArrowRight size={17}/></button>
+        <small>Primeiro acesso: admin / admin · será exigida uma nova senha.</small>
+      </form>
+    </main>
+  );
+
+  if (user.mustChangePassword) return (
+    <main className="auth-screen">
+      <div className="auth-brand">
+        <div className="brand-glyph"><ShieldCheck size={38}/></div>
+        <span className="eyebrow">Primeiro acesso</span>
+        <h1>Proteja sua <span>conta.</span></h1>
+        <p>Antes de administrar suas estações, substitua a senha padrão por uma senha pessoal e forte.</p>
+      </div>
+      <form className="auth-panel" onSubmit={(event) => { void changePassword(event); }}>
+        <h2>Alteração obrigatória de senha</h2>
+        <p>A conta admin/admin não poderá acessar o painel sem essa alteração.</p>
+        {error && <div className="error-box" role="alert">{error}</div>}
+        <label>Senha atual<input type="password" required value={currentPassword} autoComplete="current-password" onChange={(event) => setCurrentPassword(event.target.value)}/></label>
+        <label>Nova senha (mínimo 12 caracteres)<input type="password" minLength={12} required value={newPassword} autoComplete="new-password" onChange={(event) => setNewPassword(event.target.value)}/></label>
+        <label>Confirmar nova senha<input type="password" minLength={12} required value={confirmPassword} autoComplete="new-password" onChange={(event) => setConfirmPassword(event.target.value)}/></label>
+        <button className="primary-button" type="submit" disabled={authBusy}>Salvar nova senha <ArrowRight size={17}/></button>
+        <button className="text-button" type="button" onClick={() => { void logout(); }}>Sair</button>
+      </form>
+    </main>
+  );
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div>
-          <span className="eyebrow">IoT Observability</span>
-          <h1>DengueSaaS Monitor</h1>
-          <p>Monitoramento centralizado das estações climáticas Raspberry Pi.</p>
+    <div className="admin-layout">
+      <aside className={`admin-sidebar ${mobileNav ? 'mobile-open' : ''}`}>
+        <div className="sidebar-brand">
+          <div className="sidebar-logo"><CloudSun size={25}/></div>
+          <div><strong>DengueSaaS</strong><small>ADMIN CONSOLE</small></div>
+          <button className="mobile-only icon-button" onClick={() => setMobileNav(false)} aria-label="Fechar menu"><X size={19}/></button>
         </div>
-        <button className="theme-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          {theme === 'dark' ? 'Claro' : 'Escuro'}
-        </button>
-      </header>
-
-      {error && <div className="error-box">{error}. Confira se a API está rodando.</div>}
-
-      <section className="stats-grid">
-        <StatCard label="Estações" value={dashboard?.summary.totalStations ?? 0} hint="Total cadastradas" />
-        <StatCard label="Online" value={dashboard?.summary.onlineCount ?? 0} hint="Com heartbeat recente" />
-        <StatCard label="Offline" value={dashboard?.summary.offlineCount ?? 0} hint="Sem heartbeat" />
-        <StatCard label="Serviços com alerta" value={dashboard?.summary.serviceProblems ?? 0} hint="systemd diferente de RUNNING" />
-      </section>
-
-      <OperationMap stations={filteredStations} onSelect={selectStation} />
-
-      <section className="toolbar card">
-        <Activity size={20} />
-        <div className="search-box">
-          <Search size={18} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar estação, slug ou localização" />
+        <div className="sidebar-overline">WORKSPACE</div>
+        <nav aria-label="Navegação principal">
+          {nav.map(({ key, label, Icon }) => (
+            <button key={key} className={`sidebar-link ${page === key ? 'active' : ''}`}
+              onClick={() => { setPage(key); setMobileNav(false); }}>
+              <Icon size={19}/><span>{label}</span>{page === key && <ChevronRight size={15}/>}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <div className="sidebar-status"><span className="pulse-dot"/><div><strong>Sistema conectado</strong><small>{connected} de {total} estações online</small></div></div>
+          <button className="sidebar-profile" onClick={() => { setPage('settings'); setMobileNav(false); }}>
+            <div className="profile-avatar">AD</div><span><strong>{user.username}</strong><small>Administrador</small></span><Settings2 size={17}/>
+          </button>
+          <button className="sidebar-link logout-link" onClick={() => { void logout(); }}><LogOut size={18}/> Encerrar sessão</button>
         </div>
-      </section>
+      </aside>
 
-      <StationTable stations={filteredStations} onSelect={selectStation} />
-
-      {selectedStation && (
-        <section className="details-grid">
-          <div className="card details-card">
-            <div className="section-title">
-              <span>Detalhes</span>
-              <button onClick={() => setSelectedStation(null)}>Fechar</button>
+      <div className="admin-main">
+        <header className="admin-header">
+          <div className="header-heading">
+            <button className="mobile-only icon-button" onClick={() => setMobileNav(true)} aria-label="Abrir menu"><Menu size={20}/></button>
+            <div><div className="header-breadcrumb">Painel administrativo <ChevronRight size={13}/> {pageTitles[page].title}</div>
+              <h1>{pageTitles[page].title}</h1>
+              <p>{pageTitles[page].desc}</p>
             </div>
-            <h2>{selectedStation.name}</h2>
-            <dl>
-              <div><dt>Localização</dt><dd>{selectedStation.location ?? '-'}</dd></div>
-              <div><dt>Coordenadas</dt><dd>{selectedStation.latitude?.toFixed(4) ?? '-'}, {selectedStation.longitude?.toFixed(4) ?? '-'}</dd></div>
-              <div><dt>Editar posição fixa</dt><dd>
-                <form onSubmit={(event) => { event.preventDefault(); void saveLocation(); }} style={{ display: 'grid', gap: 8 }}>
-                  <input aria-label="Latitude" placeholder="Latitude (ex.: -20.8339)" value={latitudeInput} onChange={(event) => setLatitudeInput(event.target.value)} />
-                  <input aria-label="Longitude" placeholder="Longitude (ex.: -49.3999)" value={longitudeInput} onChange={(event) => setLongitudeInput(event.target.value)} />
-                  <input aria-label="Chave administrativa" type="password" autoComplete="off" placeholder="Chave administrativa" value={adminKey} onChange={(event) => setAdminKey(event.target.value)} />
-                  <button type="submit" disabled={locationSaving || !adminKey}>{locationSaving ? 'Salvando...' : 'Salvar coordenadas'}</button>
-                  {locationMessage && <small role="status">{locationMessage}</small>}
-                </form>
-              </dd></div>
-              <div><dt>IP</dt><dd>{selectedStation.ipAddress ?? '-'}</dd></div>
-              <div><dt>Agente</dt><dd>{selectedStation.agentVersion ?? '-'}</dd></div>
-              <div><dt>Último heartbeat</dt><dd>{formatDate(selectedStation.lastHeartbeatAt)}</dd></div>
-              <div><dt>Tempo online</dt><dd>{formatDuration(selectedStation.uptimeSeconds)}</dd></div>
-              <div><dt>Serviço</dt><dd>{selectedStation.serviceStatus}</dd></div>
-              <div><dt>CPU</dt><dd>{formatPercent(selectedStation.lastCpuPercent)}</dd></div>
-              <div><dt>RAM</dt><dd>{formatPercent(selectedStation.lastMemoryPercent)}</dd></div>
-              <div><dt>Disco</dt><dd>{formatPercent(selectedStation.lastDiskPercent)}</dd></div>
-              <div><dt>Temperatura</dt><dd>{formatTemperature(selectedStation.lastTemperatureCelsius)}</dd></div>
-            </dl>
           </div>
+          <div className="header-actions">
+            <span className="header-live"><span className="pulse-dot"/> Atualização a cada 15s</span>
+            <button className="icon-button" title="Alternar tema" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+              {theme === 'dark' ? <Sun size={19}/> : <Moon size={19}/>}
+            </button>
+            <button className="outline-button" onClick={() => { void exportCsv(); }} disabled={busyAction === 'all'}>
+              <Download size={17}/> Exportar tudo
+            </button>
+          </div>
+        </header>
 
-          <MetricsChart metrics={selectedStation.metrics} />
+        <div className="admin-content">
+          {error && <div className="error-box" role="alert"><AlertTriangle size={17}/>{error}<button onClick={() => setError('')} aria-label="Fechar alerta"><X size={16}/></button></div>}
+          {notice && <div className="notice-box" role="status"><CheckCircle2 size={17}/>{notice}<button onClick={() => setNotice('')} aria-label="Fechar aviso"><X size={16}/></button></div>}
 
-          <EnvironmentalDashboard
-            readings={selectedStation.sensorReadings}
-            latest={selectedStation.latestSensorPayload}
-            latestAt={selectedStation.latestSensorPayloadAt}
-          />
+          {page === 'overview' && <>
+            <div className="overview-intro"><div><span className="eyebrow">SITUAÇÃO DA REDE</span><h2>Seu ecossistema em tempo real</h2><p>Acompanhe a disponibilidade e o desempenho dos pontos de coleta.</p></div>
+              <div className="overview-updated"><RefreshCw size={16}/> Monitoramento ativo</div>
+            </div>
+            <section className="stats-grid">
+              <StatCard label="Estações cadastradas" value={total} hint="Dispositivos na rede"/>
+              <StatCard label="Estações online" value={connected} hint={total ? `${Math.round(connected / total * 100)}% da rede` : 'Aguardando estações'}/>
+              <StatCard label="Em atenção / offline" value={(dashboard?.summary.offlineCount ?? 0) + (dashboard?.summary.serviceProblems ?? 0)} hint="Verifique serviços e conexões"/>
+              <StatCard label="Temperatura média" value={meanTemperature === '—' ? '—' : `${meanTemperature} °C`} hint="Última medição disponível"/>
+            </section>
+            <OperationMap stations={dashboard?.stations ?? []} onSelect={(id) => { void openStation(id); }} />
+            <div className="section-heading"><div><h2>Estações monitoradas</h2><p>Dados operacionais e ambientais mais recentes</p></div><button className="text-button" onClick={() => setPage('stations')}>Gerenciar estações <ArrowRight size={16}/></button></div>
+            <StationTable stations={dashboard?.stations ?? []} onSelect={(id) => { void openStation(id); }}/>
+          </>}
 
-          <div className="card logs-card">
-            <h2>Eventos recentes</h2>
-            {selectedStation.events.length === 0 && <p>Nenhum evento registrado.</p>}
-            {selectedStation.events.map((event) => (
-              <div className="log-line" key={event.id}>
-                <span>{formatDate(event.createdAt)}</span>
-                <strong>{event.severity}</strong>
-                <p>{event.message}</p>
+          {page === 'stations' && <>
+            <div className="section-toolbar">
+              <div className="search-box"><Search size={18}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por nome, ID ou localização"/></div>
+              <span className="count-pill">{filtered.length} estações</span>
+            </div>
+            <div className="station-card-grid">
+              {filtered.map((station) => (
+                <article key={station.id} className="station-manage-card">
+                  <div className="station-card-top"><div className="station-icon"><RadioTower size={22}/></div><span className={`status-chip ${statusClass(station)}`}><span/>{statusText(station)}</span></div>
+                  <div className="station-card-name"><small>{station.slug}</small><h3>{station.name}</h3><p><MapPin size={14}/>{station.location ?? 'Localização não cadastrada'}</p></div>
+                  <div className="station-quick-stats">
+                    <span><Thermometer size={16}/> {formatTemperature(station.latestSensorPayload?.temperatura)}</span>
+                    <span><Droplets size={16}/> {formatPercent(station.latestSensorPayload?.umidade)}</span>
+                    <span><Cpu size={16}/> {formatPercent(station.lastCpuPercent)}</span>
+                    <span><Server size={16}/> {formatPercent(station.lastDiskPercent)}</span>
+                  </div>
+                  <p className="station-last">Último contato: {formatDuration(station.secondsSinceHeartbeat)}</p>
+                  <div className="station-card-actions">
+                    <button className="primary-button small" onClick={() => { void openStation(station.id); }}>Detalhes <ArrowRight size={15}/></button>
+                    <button className="icon-button" title="Baixar CSV da estação" onClick={() => { void exportCsv(station.id); }}><Download size={17}/></button>
+                    <button className="icon-button" title="Reiniciar coletor de sensores" disabled={station.computedStatus !== 'ONLINE'} onClick={() => { void restartStation(station, 'RESTART_COLLECTOR'); }}><RotateCcw size={17}/></button>
+                    <button className="icon-button danger-button" title="Reiniciar Raspberry Pi" disabled={station.computedStatus !== 'ONLINE' || !station.lastBootId} onClick={() => { void restartStation(station, 'REBOOT_HOST'); }}><Power size={17}/></button>
+                  </div>
+                </article>
+              ))}
+            </div>
+            {!filtered.length && <div className="card empty-state"><CircleHelp size={27}/><h3>Nenhuma estação encontrada</h3><p>Ajuste sua busca ou aguarde o primeiro heartbeat de um dispositivo.</p></div>}
+          </>}
+
+          {page === 'telemetry' && <>
+            <div className="section-toolbar telemetry-select">
+              <label>Estação em análise
+                <select value={selectedStation?.id ?? ''} onChange={(e) => { void openStation(e.target.value); }}>
+                  <option value="" disabled>Selecione uma estação</option>
+                  {(dashboard?.stations ?? []).map((station) => <option value={station.id} key={station.id}>{station.slug} — {station.name}</option>)}
+                </select>
+              </label>
+              {selectedStation && <div className="header-actions">
+                <button className="outline-button" onClick={() => { void exportCsv(selectedStation.id); }}><Download size={16}/> CSV da estação</button>
+                <button className="outline-button" onClick={() => { void openStation(selectedStation.id); }}><RefreshCw size={16}/> Atualizar</button>
+              </div>}
+            </div>
+            {!selectedStation ? <div className="card empty-state"><ChartNoAxesCombined size={32}/><h3>Selecione uma estação</h3><p>Escolha um ponto de coleta para visualizar sensores e diagnósticos.</p></div> : <>
+              <div className="station-detail-banner">
+                <div><span className="eyebrow">ESTAÇÃO {selectedStation.slug}</span><h2>{selectedStation.name}</h2>
+                  <p><MapPin size={16}/>{selectedStation.location ?? 'Sem localização'} · {selectedStation.ipAddress ?? 'IP não informado'}</p></div>
+                <span className={`status-chip ${statusClass(selectedStation)}`}><span/>{statusText(selectedStation)}</span>
               </div>
-            ))}
-          </div>
-
-          <div className="card logs-card">
-            <h2>Logs recentes</h2>
-            {selectedStation.logs.length === 0 && <p>Nenhum log recebido.</p>}
-            {selectedStation.logs.map((log) => (
-              <div className="log-line" key={log.id}>
-                <span>{formatDate(log.occurredAt)}</span>
-                <strong>{log.level}</strong>
-                <p>{log.message}</p>
+              <div className="details-grid">
+                <div className="card details-card">
+                  <div className="section-title"><span>Diagnóstico operacional</span></div>
+                  <dl>
+                    <div><dt>Último contato</dt><dd>{formatDate(selectedStation.lastHeartbeatAt)}</dd></div>
+                    <div><dt>Última coleta</dt><dd>{formatDate(selectedStation.lastDataReceivedAt)}</dd></div>
+                    <div><dt>CPU</dt><dd>{formatPercent(selectedStation.lastCpuPercent)}</dd></div>
+                    <div><dt>RAM</dt><dd>{formatPercent(selectedStation.lastMemoryPercent)}</dd></div>
+                    <div><dt>Disco</dt><dd>{formatPercent(selectedStation.lastDiskPercent)}</dd></div>
+                    <div><dt>Temperatura da Pi</dt><dd>{formatTemperature(selectedStation.lastTemperatureCelsius)}</dd></div>
+                    <div><dt>Serviço</dt><dd>{selectedStation.serviceStatus}</dd></div>
+                    <div><dt>Versão do agente</dt><dd>{selectedStation.agentVersion ?? '—'}</dd></div>
+                  </dl>
+                </div>
+                <MetricsChart metrics={selectedStation.metrics}/>
+                <EnvironmentalDashboard readings={selectedStation.sensorReadings} latest={selectedStation.latestSensorPayload} latestAt={selectedStation.latestSensorPayloadAt}/>
+                <div className="card details-card">
+                  <h2>Editar estação</h2>
+                  <form className="station-edit-form" onSubmit={(e) => { void saveStation(e); }}>
+                    <label>Nome<input required minLength={2} value={editName} onChange={(e) => setEditName(e.target.value)}/></label>
+                    <label>Localização<input value={editLocation} onChange={(e) => setEditLocation(e.target.value)}/></label>
+                    <label>Descrição<textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)}/></label>
+                    <div className="form-row"><label>Latitude<input placeholder="-20.8339" value={lat} onChange={(e) => setLat(e.target.value)}/></label><label>Longitude<input placeholder="-49.3999" value={lon} onChange={(e) => setLon(e.target.value)}/></label></div>
+                    <button className="primary-button" disabled={busyAction === 'save'} type="submit">Salvar alterações <CheckCircle2 size={16}/></button>
+                  </form>
+                </div>
+                <div className="card details-card">
+                  <h2>Comandos remotos</h2><p className="muted">O agente executa apenas ações predefinidas. Cada comando fica registrado para auditoria.</p>
+                  <div className="command-buttons">
+                    <button className="outline-button" disabled={selectedStation.computedStatus !== 'ONLINE'} onClick={() => { void restartStation(selectedStation, 'RESTART_COLLECTOR'); }}><RotateCcw size={17}/> Reiniciar coletor</button>
+                    <button className="outline-button danger-button" disabled={selectedStation.computedStatus !== 'ONLINE' || !selectedStation.lastBootId} onClick={() => { void restartStation(selectedStation, 'REBOOT_HOST'); }}><Power size={17}/> Reiniciar Raspberry</button>
+                  </div>
+                  <h3>Últimos comandos</h3>
+                  <div className="command-list">
+                    {selectedStation.commands?.length ? selectedStation.commands.map((cmd) => <div className="command-item" key={cmd.id}><span>{cmd.type === 'REBOOT_HOST' ? 'Reboot da Pi' : 'Reinício do coletor'}<small>{formatDate(cmd.requestedAt)}</small></span><b>{cmd.status}</b></div>) : <p className="muted">Nenhum comando enviado.</p>}
+                  </div>
+                </div>
+                <div className="card logs-card"><h2>Eventos recentes</h2>{selectedStation.events.length ? selectedStation.events.map((ev) => <div className="log-line" key={ev.id}><span>{formatDate(ev.createdAt)}</span><strong>{ev.severity}</strong><p>{ev.message}</p></div>) : <p className="muted">Sem eventos recentes.</p>}</div>
+                <div className="card logs-card"><h2>Logs da estação</h2>{selectedStation.logs.length ? selectedStation.logs.map((log) => <div className="log-line" key={log.id}><span>{formatDate(log.occurredAt)}</span><strong>{log.level}</strong><p>{log.message}</p></div>) : <p className="muted">Sem logs recentes.</p>}</div>
               </div>
-            ))}
-          </div>
-        </section>
-      )}
-    </main>
+            </>}
+          </>}
+
+          {page === 'activity' && <div className="card activity-card"><div className="section-heading"><div><h2>Trilha de auditoria</h2><p>Ações realizadas por administradores e agentes</p></div><ShieldCheck size={21}/></div>
+            {activity.length ? activity.map((event) => <div className="activity-entry" key={event.id}><div className="activity-mark"><Activity size={16}/></div><div><strong>{event.message}</strong><p>{event.station ? `${event.station.slug} · ${event.station.name}` : 'Plataforma'} · {event.type}</p></div><time>{formatDate(event.createdAt)}</time></div>) : <div className="empty-state"><Bell size={24}/><p>Nenhuma atividade administrativa registrada ainda.</p></div>}
+          </div>}
+
+          {page === 'settings' && <div className="settings-grid">
+            <div className="card settings-card"><div className="settings-icon"><ShieldCheck size={23}/></div><h2>Segurança da conta</h2><p>Atualize sua senha de administrador periodicamente.</p>
+              <form className="station-edit-form" onSubmit={(e) => { void changePassword(e); }}>
+                <label>Senha atual<input required type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}/></label>
+                <label>Nova senha<input required type="password" minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}/></label>
+                <label>Confirmar nova senha<input required type="password" minLength={12} autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}/></label>
+                <button className="primary-button" type="submit" disabled={authBusy}>Alterar senha <ArrowRight size={16}/></button>
+              </form>
+            </div>
+            <div className="card settings-card"><div className="settings-icon"><Database size={23}/></div><h2>Armazenamento e exportações</h2><p>As exportações utilizam os registros ambientais que já chegaram ao banco do SaaS.</p>
+              <button className="outline-button" onClick={() => { void exportCsv(); }}><Download size={17}/> Baixar CSV consolidado</button>
+              <div className="settings-info"><span>Fonte</span><strong>PostgreSQL · SENSOR_PAYLOAD</strong><span>Formato</span><strong>CSV UTF-8, separado por ponto e vírgula</strong></div>
+            </div>
+            <div className="card settings-card"><div className="settings-icon"><Server size={23}/></div><h2>Ambiente</h2><p>DengueSaaS Administrative Console</p><div className="settings-info"><span>Conta</span><strong>{user.username}</strong><span>Perfil</span><strong>{user.role}</strong><span>Monitoramento</span><strong>A cada 15 segundos</strong></div></div>
+          </div>}
+        </div>
+      </div>
+    </div>
   );
 }
