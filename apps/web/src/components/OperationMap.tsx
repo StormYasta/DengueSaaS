@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { geoJSON } from 'leaflet';
 import type { Feature } from 'geojson';
-import { ArrowDownUp, Layers3, MapPinned, Minimize2 } from 'lucide-react';
+import { Activity, ArrowDownUp, ArrowUpRight, Clock3, Droplets, Layers3, MapPin, MapPinned, Minimize2, Thermometer, Wind } from 'lucide-react';
 import {
   CircleMarker,
   GeoJSON,
   MapContainer,
+  Pane,
   Popup,
   TileLayer,
   useMap,
@@ -13,6 +14,7 @@ import {
 import 'leaflet/dist/leaflet.css';
 import { RegionMapResponse, Station } from '../services/api';
 import {
+  formatDate,
   formatDuration,
   formatPercent,
   formatTemperature,
@@ -54,8 +56,72 @@ function getMarkerColor(station: Station) {
 }
 
 function formatWind(value?: number | null) {
-  if (value === null || value === undefined || value < 0) return '-';
-  return `${value.toFixed(1)} km/h`;
+  if (value === null || value === undefined || value < 0 || !Number.isFinite(value)) return '—';
+  return `${value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km/h`;
+}
+
+function formatAirIndex(value?: number | null) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '—';
+  return value.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+}
+
+function stationStatus(station: Station) {
+  if (station.computedStatus !== 'ONLINE') return { label: 'Offline', tone: 'danger' };
+  if (station.serviceStatus !== 'RUNNING' || (station.lastTemperatureCelsius ?? 0) >= 65 || (station.lastDiskPercent ?? 0) >= 90) {
+    return { label: 'Atenção', tone: 'warning' };
+  }
+  return { label: 'Online', tone: 'success' };
+}
+
+function StationMapSummary({ station, onOpen }: { station: Station; onOpen: () => void }) {
+  const sensor = station.latestSensorPayload;
+  const status = stationStatus(station);
+
+  return (
+    <div className="station-map-summary">
+      <header className="station-map-summary-header">
+        <div className="station-map-summary-heading">
+          <span className="station-map-summary-kicker">{station.slug}</span>
+          <h3>{station.name}</h3>
+          <p><MapPin size={13} /> {station.location ?? 'Localização não cadastrada'}</p>
+        </div>
+        <span className={`station-map-summary-status ${status.tone}`}>
+          <i aria-hidden="true" />{status.label}
+        </span>
+      </header>
+
+      <div className="station-map-summary-grid" aria-label="Últimos indicadores ambientais recebidos">
+        <div className="station-map-summary-metric">
+          <Thermometer size={17} className="metric-temp" />
+          <small>Temperatura</small>
+          <strong>{formatTemperature(sensor?.temperatura)}</strong>
+        </div>
+        <div className="station-map-summary-metric">
+          <Droplets size={17} className="metric-humidity" />
+          <small>Umidade</small>
+          <strong>{formatPercent(sensor?.umidade)}</strong>
+        </div>
+        <div className="station-map-summary-metric">
+          <Wind size={17} className="metric-wind" />
+          <small>Vento</small>
+          <strong>{formatWind(sensor?.vel_vento)}</strong>
+        </div>
+        <div className="station-map-summary-metric">
+          <Activity size={17} className="metric-air" />
+          <small>MQ-135 · bruto</small>
+          <strong>{formatAirIndex(sensor?.qual_ar)}</strong>
+        </div>
+      </div>
+
+      <div className="station-map-summary-meta">
+        <div><Clock3 size={14} /><span>Última leitura</span><strong>{formatDate(station.latestSensorPayloadAt ?? station.lastDataReceivedAt)}</strong></div>
+        <div><Clock3 size={14} /><span>Último contato</span><strong>{formatDuration(station.secondsSinceHeartbeat)}</strong></div>
+      </div>
+      <button type="button" className="station-map-summary-action" onClick={onOpen}>
+        Abrir painel da estação <ArrowUpRight size={16} />
+      </button>
+    </div>
+  );
 }
 
 function FitMapBounds({ stations, skip }: { stations: Station[]; skip: boolean }) {
@@ -137,7 +203,7 @@ export function OperationMap({
           <span className="eyebrow">Monitoramento geográfico</span>
           <h2>Mapa operacional — São José do Rio Preto</h2>
           <p>
-            Clique em uma estação para consultar o dashboard ambiental.
+            Clique em um marcador para visualizar o resumo da estação.
           </p>
         </div>
         <div className="map-header-actions">
@@ -190,6 +256,7 @@ export function OperationMap({
           <FitMapBounds stations={mappedStations} skip={showRegions && hasRegions}/>
           <FitRegionBounds regions={regions} selectedRegion={selectedRegion} show={showRegions}/>
 
+          <Pane name="dengue-regions" style={{ zIndex: 410 }}>
           {showRegions && polygons && <GeoJSON
             key={`${regions?.updatedAt ?? ''}-${selectedRegion}`}
             data={polygons}
@@ -215,10 +282,11 @@ export function OperationMap({
               if (onRegionSelect) layer.on('click', () => onRegionSelect(selectedRegion === name ? '' : name));
             }}
           />}
+          </Pane>
 
+          <Pane name="dengue-stations" style={{ zIndex: 670 }}>
           {mappedStations.map((station) => {
             const markerColor = getMarkerColor(station);
-            const sensor = station.latestSensorPayload;
 
             return (
               <CircleMarker
@@ -234,44 +302,15 @@ export function OperationMap({
                   weight: 3,
                   className: 'station-status-marker',
                 }}
-                radius={12}
-                eventHandlers={{ click: () => onSelect(station.id) }}
+                radius={13}
               >
-                <Popup>
-                  <div className="map-popup">
-                    <strong>{station.slug} — {station.name}</strong>
-                    <span>
-                      {station.location ?? 'Sem localização cadastrada'}
-                    </span>
-                    <div className="map-popup-grid">
-                      <small>Status</small><b>{station.computedStatus}</b>
-                      <small>Temperatura</small>
-                      <b>
-                        {formatTemperature(
-                          sensor?.temperatura ??
-                            station.lastTemperatureCelsius,
-                        )}
-                      </b>
-                      <small>Umidade</small>
-                      <b>{formatPercent(sensor?.umidade)}</b>
-                      <small>Vento</small>
-                      <b>{formatWind(sensor?.vel_vento)}</b>
-                      <small>CPU</small>
-                      <b>{formatPercent(station.lastCpuPercent)}</b>
-                      <small>Último dado</small>
-                      <b>{formatDuration(station.secondsSinceLastData)}</b>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onSelect(station.id)}
-                    >
-                      Abrir dashboard
-                    </button>
-                  </div>
+                <Popup className="station-summary-popup" minWidth={292} maxWidth={322} autoPan>
+                  <StationMapSummary station={station} onOpen={() => onSelect(station.id)} />
                 </Popup>
               </CircleMarker>
             );
           })}
+          </Pane>
         </MapContainer>
       </div>
       <div className="region-map-source">

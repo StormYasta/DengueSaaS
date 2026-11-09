@@ -2,7 +2,7 @@ name: Verify Pi5 monitoring integration
 
 on:
   pull_request:
-    branches: [main, feat/estacao-pi5-monitoramento-20261106, feat/admin-console-20261109, feat/analytics-cidade-filtros-20261109, feat/mapa-regioes-riopreto-20261109, feat/mapa-offwhite-20261109]
+    branches: [main, feat/estacao-pi5-monitoramento-20261106, feat/admin-console-20261109, feat/analytics-cidade-filtros-20261109, feat/mapa-regioes-riopreto-20261109, feat/mapa-offwhite-20261109, feat/mapa-expandir-altura-20261109]
   push:
     branches: ['feat/**', 'feat/analytics-cidade-filtros-20261109', 'feat/mapa-regioes-riopreto-20261109', 'feat/mapa-offwhite-20261109']
 
