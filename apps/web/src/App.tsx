@@ -489,7 +489,7 @@ export function App() {
             />
             {selectedRegion && <div className="regional-filter-note">
               <span><MapPin size={16}/> Região {selectedRegion}: {mappedStations.length} estação(ões) mapeada(s).
-                As médias acima continuam considerando o escopo escolhido no filtro principal.</span>
+                Os indicadores e gráficos acima continuam considerando o escopo escolhido no filtro principal.</span>
               <button type="button" onClick={() => setSelectedRegion('')}>Limpar região</button>
             </div>}
             <div className="section-heading"><div><h2>Estações monitoradas</h2><p>Situação operacional e última leitura por estação</p></div>
