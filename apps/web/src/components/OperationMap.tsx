@@ -1,12 +1,16 @@
+import { useState } from 'react';
+import type { Feature } from 'geojson';
+import { Layers3, MapPinned } from 'lucide-react';
 import {
   CircleMarker,
+  GeoJSON,
   MapContainer,
   Popup,
   TileLayer,
   useMap,
 } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Station } from '../services/api';
+import { RegionMapResponse, Station } from '../services/api';
 import {
   formatDuration,
   formatPercent,
@@ -16,7 +20,23 @@ import {
 type OperationMapProps = {
   stations: Station[];
   onSelect: (stationId: string) => void;
+  regions?: RegionMapResponse | null;
+  selectedRegion?: string;
+  onRegionSelect?: (regionName: string) => void;
 };
+
+const palette = [
+  '#9d87fa', '#39b7a4', '#faa96b', '#6aa5ff', '#d888d7',
+  '#74c79a', '#e9c16a', '#8da0ff', '#c8859b', '#61cad7',
+];
+const regionNames = [
+  'Bosque', 'Central', 'CEU', 'Cidade da Criança', 'HB',
+  'Pinheirinho', 'Represa', 'Schmitt', 'Talhado', 'Vila Toninho',
+];
+function regionColor(name: string) {
+  const idx = regionNames.indexOf(name);
+  return palette[idx >= 0 ? idx : 0];
+}
 
 const center: [number, number] = [-20.8197, -49.3794];
 
@@ -65,7 +85,13 @@ function FitMapBounds({ stations }: { stations: Station[] }) {
 export function OperationMap({
   stations,
   onSelect,
+  regions,
+  selectedRegion = '',
+  onRegionSelect,
 }: OperationMapProps) {
+  const [showRegions, setShowRegions] = useState(true);
+  const polygons = regions?.geojson;
+  const hasRegions = Boolean(polygons?.features.length);
   const mappedStations = stations.filter(
     (station) =>
       typeof station.latitude === 'number' &&
@@ -82,10 +108,23 @@ export function OperationMap({
             Clique em uma estação para consultar o dashboard ambiental.
           </p>
         </div>
-        <div className="map-legend">
-          <span><i className="dot success" /> Saudável</span>
-          <span><i className="dot warning" /> Atenção</span>
-          <span><i className="dot danger" /> Offline</span>
+        <div className="map-header-actions">
+          <div className="map-legend">
+            <span><i className="dot success" /> Saudável</span>
+            <span><i className="dot warning" /> Atenção</span>
+            <span><i className="dot danger" /> Offline</span>
+          </div>
+          {hasRegions && <button type="button" className={`map-layer-switch ${showRegions ? 'active' : ''}`}
+            aria-pressed={showRegions} onClick={() => setShowRegions(!showRegions)}>
+            <Layers3 size={16} /> {showRegions ? 'Ocultar regiões' : 'Mostrar regiões'}
+          </button>}
+          {hasRegions && onRegionSelect && <label className="map-region-picker">
+            <MapPinned size={15}/>
+            <select value={selectedRegion} onChange={(e) => onRegionSelect(e.target.value)} aria-label="Filtrar microregião">
+              <option value="">Todas as regiões</option>
+              {regionNames.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>}
         </div>
       </div>
 
@@ -102,6 +141,27 @@ export function OperationMap({
           />
 
           <FitMapBounds stations={mappedStations} />
+
+          {showRegions && polygons && <GeoJSON
+            key={`${regions?.updatedAt ?? ''}-${selectedRegion}`}
+            data={polygons}
+            style={(feature) => {
+              const name = String(feature?.properties?.name ?? '');
+              const selected = selectedRegion === name;
+              return {
+                color: regionColor(name),
+                weight: selected ? 3.8 : 1.8,
+                fillColor: regionColor(name),
+                fillOpacity: selected ? 0.23 : 0.095,
+                opacity: selected ? 1 : 0.85,
+              };
+            }}
+            onEachFeature={(feature: Feature, layer) => {
+              const name = String(feature.properties?.name ?? '');
+              layer.bindTooltip(name, { sticky: true, direction: 'top' });
+              if (onRegionSelect) layer.on('click', () => onRegionSelect(selectedRegion === name ? '' : name));
+            }}
+          />}
 
           {mappedStations.map((station) => {
             const markerColor = getMarkerColor(station);
@@ -159,6 +219,12 @@ export function OperationMap({
             );
           })}
         </MapContainer>
+      </div>
+      <div className="region-map-source">
+        {hasRegions
+          ? <span>Divisão municipal em 10 regiões · camada importada de base geográfica. {regions?.source ? `Fonte declarada: ${regions.source}` : 'Fonte não informada.'}</span>
+          : <span>Camada das 10 regiões ainda não importada. Adicione a malha GeoJSON oficial em Configurações.</span>}
+        <a href="https://sig.riopreto.sp.gov.br/portal/home/" target="_blank" rel="noreferrer">SIG Rio Preto</a>
       </div>
     </div>
   );
