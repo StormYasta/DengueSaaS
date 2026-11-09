@@ -7,6 +7,19 @@ on:
     branches: ['feat/**', 'fix/**', 'feat/analytics-cidade-filtros-20261109', 'feat/mapa-regioes-riopreto-20261109', 'feat/mapa-offwhite-20261109']
 
 jobs:
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+
   api:
     runs-on: ubuntu-latest
     defaults:
@@ -19,19 +32,6 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npx prisma generate
-      - run: npm run build
-
-  web:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/web
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm install --no-audit --no-fund
       - run: npm run build
 
   agent:
