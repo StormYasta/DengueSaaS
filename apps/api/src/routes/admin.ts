@@ -104,6 +104,7 @@ export async function adminRoutes(app: FastifyInstance) {
       where: { type: { in: [
         'STATION_UPDATED', 'STATION_RESTART_REQUESTED', 'HOST_REBOOT_REQUESTED',
         'COMMAND_RESULT', 'REBOOT_COMPLETED', 'ADMIN_PASSWORD_CHANGED', 'REGION_MAP_IMPORTED',
+        'USER_CREATED', 'USER_UPDATED', 'USER_PASSWORD_RESET',
       ] } },
       orderBy: { createdAt: 'desc' },
       take: limit,
