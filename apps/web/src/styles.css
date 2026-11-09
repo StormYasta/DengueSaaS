@@ -780,3 +780,46 @@ body[data-theme='light'] .period-custom-row input { color-scheme: light; }
   .map-header-actions .map-legend { justify-content: flex-start; }
   .regional-filter-note { align-items: flex-start; flex-direction: column; }
 }
+
+
+/* Base cartográfica off-white: afeta somente os tiles, nunca regiões, marcadores ou popups. */
+.map-card .map-basemap-muted.leaflet-container {
+  background: #f4f1e9;
+}
+.map-card .map-basemap-muted .leaflet-tile-pane {
+  filter: grayscale(1) sepia(0.13) saturate(0.3) brightness(1.09) contrast(0.78);
+}
+.map-card .map-basemap-muted .leaflet-control-zoom a {
+  background: #faf8f2;
+  color: #42434b;
+  border-color: #dfdcd4;
+}
+.map-card .map-basemap-muted .leaflet-control-attribution {
+  background: rgba(250, 248, 242, 0.88);
+  color: #72716c;
+}
+.map-card .map-basemap-muted .leaflet-control-attribution a {
+  color: #65616b;
+}
+.map-card .map-basemap-muted .region-name-tooltip {
+  background: rgba(252, 250, 245, 0.94);
+  border: 1px solid rgba(120, 117, 117, 0.2);
+  border-radius: 7px;
+  box-shadow: 0 2px 8px rgba(30, 33, 38, 0.11);
+  color: #444351;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.015em;
+  padding: 4px 7px;
+  pointer-events: none;
+}
+.map-card .map-basemap-muted .region-name-tooltip::before {
+  display: none;
+}
+.map-card .map-basemap-muted .station-status-marker {
+  filter: drop-shadow(0 1px 4px rgba(33, 38, 44, 0.46));
+}
+.map-card .leaflet-map-area {
+  background: #f4f1e9;
+  border-color: #d9d6ce;
+}

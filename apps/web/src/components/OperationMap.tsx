@@ -151,7 +151,7 @@ export function OperationMap({
           center={center}
           zoom={12}
           scrollWheelZoom
-          className="leaflet-map"
+          className="leaflet-map map-basemap-muted"
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -169,15 +169,20 @@ export function OperationMap({
               const selected = selectedRegion === name;
               return {
                 color: regionColor(name),
-                weight: selected ? 3.8 : 1.8,
+                weight: selected ? 3.6 : 2.1,
                 fillColor: regionColor(name),
-                fillOpacity: selected ? 0.23 : 0.095,
-                opacity: selected ? 1 : 0.85,
+                fillOpacity: selected ? 0.28 : 0.16,
+                opacity: selected ? 1 : 0.94,
               };
             }}
             onEachFeature={(feature: Feature, layer) => {
               const name = String(feature.properties?.name ?? '');
-              layer.bindTooltip(name, { sticky: true, direction: 'top' });
+              layer.bindTooltip(name, {
+                permanent: true,
+                direction: 'center',
+                className: 'region-name-tooltip',
+                opacity: 0.95,
+              });
               if (onRegionSelect) layer.on('click', () => onRegionSelect(selectedRegion === name ? '' : name));
             }}
           />}
@@ -194,10 +199,11 @@ export function OperationMap({
                   station.longitude as number,
                 ]}
                 pathOptions={{
-                  color: markerColor,
+                  color: '#ffffff',
                   fillColor: markerColor,
-                  fillOpacity: 0.92,
+                  fillOpacity: 1,
                   weight: 3,
+                  className: 'station-status-marker',
                 }}
                 radius={12}
                 eventHandlers={{ click: () => onSelect(station.id) }}
