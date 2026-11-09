@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { geoJSON } from 'leaflet';
 import type { Feature } from 'geojson';
-import { Layers3, MapPinned } from 'lucide-react';
+import { ArrowDownUp, Layers3, MapPinned, Minimize2 } from 'lucide-react';
 import {
   CircleMarker,
   GeoJSON,
@@ -97,6 +97,22 @@ function FitRegionBounds({ regions, selectedRegion, show }: {
   return null;
 }
 
+function RefreshMapSize({ expanded }: { expanded: boolean }) {
+  const map = useMap();
+
+  useEffect(() => {
+    // Leaflet mede o container no início. Após a animação de altura, deve
+    // recalcular o tamanho para não deixar uma faixa vazia ou tiles cortados.
+    map.invalidateSize({ pan: false });
+    const timeout = window.setTimeout(() => {
+      map.invalidateSize({ pan: false });
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [expanded, map]);
+
+  return null;
+}
+
 export function OperationMap({
   stations,
   onSelect,
@@ -105,6 +121,7 @@ export function OperationMap({
   onRegionSelect,
 }: OperationMapProps) {
   const [showRegions, setShowRegions] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const polygons = regions?.geojson;
   const hasRegions = Boolean(polygons?.features.length);
   const mappedStations = stations.filter(
@@ -114,7 +131,7 @@ export function OperationMap({
   );
 
   return (
-    <div className="card map-card">
+    <div className={`card map-card ${expanded ? 'map-expanded' : ''}`}>
       <div className="map-header">
         <div>
           <span className="eyebrow">Monitoramento geográfico</span>
@@ -129,6 +146,17 @@ export function OperationMap({
             <span><i className="dot warning" /> Atenção</span>
             <span><i className="dot danger" /> Offline</span>
           </div>
+          <button
+            type="button"
+            className={`map-size-toggle ${expanded ? 'active' : ''}`}
+            aria-expanded={expanded}
+            aria-controls="dengue-operation-map"
+            onClick={() => setExpanded((value) => !value)}
+            title={expanded ? 'Voltar ao tamanho compacto' : 'Aumentar a altura do mapa em 80%'}
+          >
+            {expanded ? <Minimize2 size={16} /> : <ArrowDownUp size={16} />}
+            {expanded ? 'Recolher mapa' : 'Expandir mapa'}
+          </button>
           {hasRegions && <button type="button" className={`map-layer-switch ${showRegions ? 'active' : ''}`}
             aria-pressed={showRegions} onClick={() => {
               if (showRegions && selectedRegion && onRegionSelect) onRegionSelect('');
@@ -146,7 +174,7 @@ export function OperationMap({
         </div>
       </div>
 
-      <div className="leaflet-map-area">
+      <div id="dengue-operation-map" className="leaflet-map-area">
         <MapContainer
           center={center}
           zoom={12}
@@ -158,6 +186,7 @@ export function OperationMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
+          <RefreshMapSize expanded={expanded}/>
           <FitMapBounds stations={mappedStations} skip={showRegions && hasRegions}/>
           <FitRegionBounds regions={regions} selectedRegion={selectedRegion} show={showRegions}/>
 
