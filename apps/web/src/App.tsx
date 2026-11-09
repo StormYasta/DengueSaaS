@@ -7,7 +7,8 @@ import {
   Sun, Thermometer, Wind, X,
 } from 'lucide-react';
 import { EnvironmentalDashboard } from './components/EnvironmentalDashboard';
-import { MeasurementCharts, formattedMeasure } from './components/MeasurementCharts';
+import { MeasurementCharts } from './components/MeasurementCharts';
+import { OverviewInsights } from './components/OverviewInsights';
 import { PeriodControls } from './components/PeriodControls';
 import { MetricsChart } from './components/MetricsChart';
 import { OperationMap } from './components/OperationMap';
@@ -461,45 +462,12 @@ export function App() {
             {analyticsError && <div className="error-box" role="alert"><AlertTriangle size={16}/>{analyticsError}</div>}
 
             <div className="overview-analytics-layout">
-              <section className="overview-summary-column" aria-label="Resumo climático atual">
-                <div className="city-summary-head">
-                  <div>
-                    <span className="eyebrow">LEITURAS RECENTES</span>
-                    <h2>{overviewCity ? 'Condição média da rede' : 'Condição atual da estação'}</h2>
-                  </div>
-                  <div className="city-sample-badge" title="Estações online com leitura recente">
-                    <RadioTower size={16}/>
-                    <span><strong>{overviewAnalytics?.freshStations ?? '—'} / {overviewAnalytics?.totalStations ?? overviewStations.length}</strong>
-                      <small>com dados</small></span>
-                  </div>
-                </div>
-
-                <div className="city-summary-grid">
-                  {([
-                    { key: 'temperatura', title: 'Temperatura média', unit: '°C', Icon: Thermometer, color: '#ffad61' },
-                    { key: 'umidade', title: 'Umidade média', unit: '%', Icon: Droplets, color: '#5aaeff' },
-                    { key: 'vel_vento', title: 'Vento médio', unit: 'km/h', Icon: Wind, color: '#27cf9d' },
-                    { key: 'qual_ar', title: 'Indicador do ar', unit: 'índice', Icon: Activity, color: '#b58bff' },
-                  ] as const).map((indicator) => (
-                    <article className="card city-summary-card" key={indicator.key}>
-                      <div className="city-card-heading">
-                        <span>{indicator.title}</span>
-                        <indicator.Icon size={16} style={{ color: indicator.color }}/>
-                      </div>
-                      <strong>{formattedMeasure(overviewAnalytics?.averages[indicator.key], indicator.unit)}</strong>
-                      <small>{overviewAnalytics?.samplesByMetric[indicator.key] ?? 0} estação(ões)</small>
-                    </article>
-                  ))}
-                </div>
-
-                <div className="city-summary-footnote">
-                  <span><RadioTower size={14}/> {connected} online de {total} cadastradas · {(dashboard?.stations ?? []).filter((item) => item.computedStatus !== 'ONLINE' || item.serviceStatus !== 'RUNNING').length} em atenção/offline</span>
-                  <span>Última leitura: {formatDate(overviewAnalytics?.snapshotAt)}</span>
-                </div>
-                {overviewCity && <p className="city-disclaimer">
-                  Média dos pontos monitorados, não de toda a cidade. Cada estação com leitura válida e recente tem peso igual.
-                </p>}
-              </section>
+              <OverviewInsights
+                analytics={overviewAnalytics}
+                fallbackOnline={overviewStationId ? overviewStations.filter((station) => station.computedStatus === 'ONLINE').length : connected}
+                fallbackTotal={overviewStationId ? overviewStations.length : total}
+                scoped={!overviewCity}
+              />
 
               <section className="overview-charts-column" aria-label="Evolução histórica do clima">
                 {analyticsLoading && !overviewAnalytics && <div className="card measurement-empty">Carregando histórico do período...</div>}
