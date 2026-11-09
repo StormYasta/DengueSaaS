@@ -13,9 +13,10 @@ import { MetricsChart } from './components/MetricsChart';
 import { OperationMap } from './components/OperationMap';
 import { StationTable } from './components/StationTable';
 import {
-  api, ActivityEvent, AdminUser, ApiError, AnalyticsResponse, DashboardResponse, PeriodSelection, Station, StationDetail,
+  api, ActivityEvent, AdminUser, ApiError, AnalyticsResponse, DashboardResponse, PeriodSelection, RegionMapResponse, Station, StationDetail,
 } from './services/api';
 import { formatDate, formatDuration, formatPercent, formatTemperature } from './utils/format';
+import { belongsToRegion } from './utils/regions';
 
 type Page = 'overview' | 'stations' | 'telemetry' | 'activity' | 'settings';
 
@@ -60,6 +61,11 @@ export function App() {
   const [overviewPeriod, setOverviewPeriod] = useState<PeriodSelection>({ range: '24h' });
   const [detailPeriod, setDetailPeriod] = useState<PeriodSelection>({ range: '24h' });
   const [overviewStationId, setOverviewStationId] = useState('');
+  const [regionMap, setRegionMap] = useState<RegionMapResponse | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState('');
+  const [regionFile, setRegionFile] = useState<File | null>(null);
+  const [regionSource, setRegionSource] = useState('https://sig.riopreto.sp.gov.br/portal/home/');
+  const [regionImportBusy, setRegionImportBusy] = useState(false);
   const [overviewAnalytics, setOverviewAnalytics] = useState<AnalyticsResponse | null>(null);
   const [detailAnalytics, setDetailAnalytics] = useState<AnalyticsResponse | null>(null);
   const [analyticsError, setAnalyticsError] = useState('');
@@ -90,6 +96,14 @@ export function App() {
       .catch(() => setUser(null))
       .finally(() => setAuthChecking(false));
   }, []);
+
+  useEffect(() => {
+    if (!user || user.mustChangePassword) return;
+    let mounted = true;
+    api.regions().then((data) => { if (mounted) setRegionMap(data); })
+      .catch((err) => { if (mounted) setError(err instanceof Error ? err.message : 'Não foi possível carregar as regiões'); });
+    return () => { mounted = false; };
+  }, [user?.id, user?.mustChangePassword]);
 
   useEffect(() => {
     if (!user || user.mustChangePassword) return;
@@ -165,6 +179,30 @@ export function App() {
     return () => { mounted = false; window.clearInterval(timer); };
   }, [user?.id, user?.mustChangePassword, page, detailPeriod, selectedStation?.id, detailRefresh]);
 
+  async function importRegionGeoJSON(event: React.FormEvent) {
+    event.preventDefault();
+    if (!regionFile) return;
+    if (regionFile.size > 7_000_000) {
+      setError('O arquivo é muito grande. Simplifique a malha para menos de 7 MB.');
+      return;
+    }
+    setRegionImportBusy(true);
+    setError('');
+    try {
+      const contents = JSON.parse(await regionFile.text()) as unknown;
+      const result = await api.importRegions(contents, regionSource.trim());
+      const updated = await api.regions();
+      setRegionMap(updated);
+      setSelectedRegion('');
+      setRegionFile(null);
+      setNotice(`Malha importada: ${result.regionCount} regiões, ${result.polygonCount} polígonos.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível importar o arquivo GeoJSON');
+    } finally {
+      setRegionImportBusy(false);
+    }
+  }
+
   async function login(event: React.FormEvent) {
     event.preventDefault();
     setAuthBusy(true); setError('');
@@ -199,6 +237,7 @@ export function App() {
     try { await api.logout(); } catch { /* sessão pode já ter expirado */ }
     setUser(null); setDashboard(null); setSelectedStation(null);
     setOverviewAnalytics(null); setDetailAnalytics(null);
+    setRegionMap(null); setSelectedRegion('');
     setNotice(''); setError(''); setPage('overview');
   }
 
@@ -280,6 +319,9 @@ export function App() {
   const overviewStations = overviewStationId
     ? (dashboard?.stations ?? []).filter((item) => item.id === overviewStationId)
     : (dashboard?.stations ?? []);
+  const mappedStations = selectedRegion && regionMap?.geojson
+    ? overviewStations.filter((item) => belongsToRegion(item, regionMap.geojson, selectedRegion))
+    : overviewStations;
   const overviewCity = overviewStationId === '';
 
 
@@ -436,10 +478,21 @@ export function App() {
               description={`Período filtrado · faixas de ${overviewAnalytics.bucketMinutes} minuto(s) · cada estação tem peso igual em cada faixa.`}
             />}
 
-            <OperationMap stations={overviewStations} onSelect={(id) => { void openStation(id); }} />
+            <OperationMap
+              stations={mappedStations}
+              onSelect={(id) => { void openStation(id); }}
+              regions={regionMap}
+              selectedRegion={selectedRegion}
+              onRegionSelect={setSelectedRegion}
+            />
+            {selectedRegion && <div className="regional-filter-note">
+              <span><MapPin size={16}/> Região {selectedRegion}: {mappedStations.length} estação(ões) mapeada(s).
+                As médias acima continuam considerando o escopo escolhido no filtro principal.</span>
+              <button type="button" onClick={() => setSelectedRegion('')}>Limpar região</button>
+            </div>}
             <div className="section-heading"><div><h2>Estações monitoradas</h2><p>Situação operacional e última leitura por estação</p></div>
               <button className="text-button" onClick={() => setPage('stations')}>Gerenciar estações <ArrowRight size={16}/></button></div>
-            <StationTable stations={overviewStations} onSelect={(id) => { void openStation(id); }}/>
+            <StationTable stations={mappedStations} onSelect={(id) => { void openStation(id); }}/>
           </>}
 
           {page === 'stations' && <>
@@ -565,6 +618,33 @@ export function App() {
             <div className="card settings-card"><div className="settings-icon"><Database size={23}/></div><h2>Armazenamento e exportações</h2><p>As exportações utilizam os registros ambientais que já chegaram ao banco do SaaS.</p>
               <button className="outline-button" onClick={() => { void exportCsv(); }}><Download size={17}/> Baixar CSV consolidado</button>
               <div className="settings-info"><span>Fonte</span><strong>PostgreSQL · SENSOR_PAYLOAD</strong><span>Formato</span><strong>CSV UTF-8, separado por ponto e vírgula</strong></div>
+            </div>
+            <div className="card settings-card region-settings-card">
+              <div className="settings-icon"><MapPin size={23}/></div>
+              <h2>Divisão geográfica — 10 regiões</h2>
+              <p>Sobreponha os limites municipais reais ao mapa. Exporte a camada do SIG Rio Preto em GeoJSON, com coordenadas WGS84 (EPSG:4326), e importe o arquivo aqui. Não desenhamos limites estimados.</p>
+              <div className="region-import-status">
+                <span className={`status-chip ${regionMap?.available ? 'success' : 'warning'}`}><span/>
+                  {regionMap?.available ? 'Malha carregada' : 'Malha não importada'}
+                </span>
+                {regionMap?.updatedAt && <small>Última atualização: {formatDate(regionMap.updatedAt)}</small>}
+              </div>
+              <form className="station-edit-form" onSubmit={(event) => { void importRegionGeoJSON(event); }}>
+                <label>Arquivo oficial GeoJSON
+                  <input type="file" accept=".geojson,.json,application/geo+json,application/json"
+                    onChange={(event) => setRegionFile(event.target.files?.[0] ?? null)}/>
+                </label>
+                <label>Endereço da fonte geográfica
+                  <input value={regionSource} onChange={(event) => setRegionSource(event.target.value)}
+                    placeholder="Endereço da camada no SIG"/>
+                </label>
+                <button className="primary-button" type="submit" disabled={!regionFile || regionImportBusy}>
+                  <MapPin size={16}/> {regionImportBusy ? 'Validando malha...' : 'Importar as 10 regiões'}
+                </button>
+              </form>
+              <p className="region-import-hint">O arquivo precisa conter as 10 regiões como polígonos, com nomes identificáveis nas propriedades. A importação substitui a malha anterior e fica registrada na auditoria.</p>
+              <a className="region-source-link" href="https://sig.riopreto.sp.gov.br/portal/home/"
+                target="_blank" rel="noreferrer">Abrir SIG Rio Preto</a>
             </div>
             <div className="card settings-card"><div className="settings-icon"><Server size={23}/></div><h2>Ambiente</h2><p>DengueSaaS Administrative Console</p><div className="settings-info"><span>Conta</span><strong>{user.username}</strong><span>Perfil</span><strong>{user.role}</strong><span>Monitoramento</span><strong>A cada 15 segundos</strong></div></div>
           </div>}
