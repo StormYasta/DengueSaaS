@@ -31,9 +31,10 @@ type Props = {
   heading?: string;
   description?: string;
   emptyMessage?: string;
+  compact?: boolean;
 };
 
-export function MeasurementCharts({ points, heading, description, emptyMessage }: Props) {
+export function MeasurementCharts({ points, heading, description, emptyMessage, compact = false }: Props) {
   const first = points[0] ? new Date(points[0].at).getTime() : Date.now();
   const last = points.at(-1) ? new Date(points.at(-1)!.at).getTime() : Date.now();
   const broad = last - first > 36 * 3_600_000;
@@ -41,7 +42,7 @@ export function MeasurementCharts({ points, heading, description, emptyMessage }
   const visible = definitions.filter((metric) =>
     points.some((point) => typeof point[metric.key] === 'number' && Number.isFinite(point[metric.key])));
 
-  return <section className="measurement-section">
+  return <section className={`measurement-section ${compact ? 'compact' : ''}`}>
     {(heading || description) && <div className="measurement-section-heading">
       {heading && <h2>{heading}</h2>}
       {description && <p>{description}</p>}
@@ -53,18 +54,30 @@ export function MeasurementCharts({ points, heading, description, emptyMessage }
         const lastValue = valid.at(-1)?.[metric.key] ?? null;
         const gradientId = `analytics-${metric.key}`;
         return <article className="card measurement-card" key={metric.key}>
-          <div className="measurement-card-head">
-            <span className="measurement-symbol" style={{ color: metric.color, backgroundColor: `${metric.color}17` }}>
-              <metric.Icon size={19}/>
-            </span>
-            <span className="measurement-card-subtitle">{valid.length} intervalos com leitura</span>
-          </div>
-          <div className="measurement-card-title"><h3>{metric.label}</h3>
-            <strong>{formattedMeasure(lastValue, metric.unit)}</strong>
-            <small>Último valor no período</small>
-          </div>
+          {compact ? (
+            <div className="measurement-compact-header">
+              <div className="measurement-compact-label">
+                <metric.Icon size={15} style={{ color: metric.color }}/>
+                <h3>{metric.label}</h3>
+              </div>
+              <strong>{formattedMeasure(lastValue, metric.unit)}</strong>
+            </div>
+          ) : (
+            <>
+              <div className="measurement-card-head">
+                <span className="measurement-symbol" style={{ color: metric.color, backgroundColor: `${metric.color}17` }}>
+                  <metric.Icon size={19}/>
+                </span>
+                <span className="measurement-card-subtitle">{valid.length} intervalos com leitura</span>
+              </div>
+              <div className="measurement-card-title"><h3>{metric.label}</h3>
+                <strong>{formattedMeasure(lastValue, metric.unit)}</strong>
+                <small>Último valor no período</small>
+              </div>
+            </>
+          )}
           <div className="measurement-chart-area" role="img" aria-label={`Histórico de ${metric.label} com ${valid.length} intervalos`}>
-            <ResponsiveContainer width="100%" height={205}>
+            <ResponsiveContainer width="100%" height={compact ? 104 : 205}>
               <AreaChart data={points} margin={{ top: 12, right: 12, bottom: 0, left: -20 }}>
                 <defs>
                   <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -91,7 +104,8 @@ export function MeasurementCharts({ points, heading, description, emptyMessage }
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <p className="measurement-note">{metric.description}</p>
+          {compact ? <p className="measurement-note">{valid.length} intervalos · {metric.description}</p>
+            : <p className="measurement-note">{metric.description}</p>}
         </article>;
       })}
     </div>

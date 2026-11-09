@@ -419,7 +419,7 @@ export function App() {
         </div>
       </aside>
 
-      <div className="admin-main">
+      <div className={`admin-main ${page === 'overview' ? 'overview-page' : ''}`}>
         <header className="admin-header">
           <div className="header-heading">
             <button className="mobile-only icon-button" onClick={() => setMobileNav(true)} aria-label="Abrir menu"><Menu size={20}/></button>
@@ -460,42 +460,57 @@ export function App() {
 
             {analyticsError && <div className="error-box" role="alert"><AlertTriangle size={16}/>{analyticsError}</div>}
 
-            <div className="city-summary-head">
-              <div><span className="eyebrow">LEITURAS RECENTES</span><h2>{overviewCity ? 'Condição média da rede urbana' : 'Condição atual da estação'}</h2>
-                <p>Uma leitura recente por estação online (até 40 min); sem leituras antigas ou sensores inválidos.</p>
-              </div>
-              <div className="city-sample-badge"><RadioTower size={17}/>
-                <span><strong>{overviewAnalytics?.freshStations ?? '—'} / {overviewAnalytics?.totalStations ?? overviewStations.length}</strong>
-                  <small>estações com dados recentes</small></span>
-              </div>
-            </div>
+            <div className="overview-analytics-layout">
+              <section className="overview-summary-column" aria-label="Resumo climático atual">
+                <div className="city-summary-head">
+                  <div>
+                    <span className="eyebrow">LEITURAS RECENTES</span>
+                    <h2>{overviewCity ? 'Condição média da rede' : 'Condição atual da estação'}</h2>
+                  </div>
+                  <div className="city-sample-badge" title="Estações online com leitura recente">
+                    <RadioTower size={16}/>
+                    <span><strong>{overviewAnalytics?.freshStations ?? '—'} / {overviewAnalytics?.totalStations ?? overviewStations.length}</strong>
+                      <small>com dados</small></span>
+                  </div>
+                </div>
 
-            <section className="city-summary-grid">
-              {([
-                { key: 'temperatura', title: 'Temperatura média', unit: '°C', Icon: Thermometer, color: '#ffad61' },
-                { key: 'umidade', title: 'Umidade média', unit: '%', Icon: Droplets, color: '#5aaeff' },
-                { key: 'vel_vento', title: 'Vento médio', unit: 'km/h', Icon: Wind, color: '#27cf9d' },
-                { key: 'qual_ar', title: 'Indicador do ar', unit: 'índice', Icon: Activity, color: '#b58bff' },
-              ] as const).map((indicator) => (
-                <article className="card city-summary-card" key={indicator.key}>
-                  <div className="city-card-heading"><span>{indicator.title}</span><indicator.Icon size={19} style={{ color: indicator.color }}/></div>
-                  <strong>{formattedMeasure(overviewAnalytics?.averages[indicator.key], indicator.unit)}</strong>
-                  <small>{overviewAnalytics?.samplesByMetric[indicator.key] ?? 0} estação(ões) na média</small>
-                </article>
-              ))}
-            </section>
-            <div className="city-summary-footnote">
-              <span><RadioTower size={15}/> {connected} online de {total} cadastradas · {(dashboard?.stations ?? []).filter((item) => item.computedStatus !== 'ONLINE' || item.serviceStatus !== 'RUNNING').length} em atenção/offline</span>
-              <span>Último dado recebido: {formatDate(overviewAnalytics?.snapshotAt)}</span>
-            </div>
-            {overviewCity && <p className="city-disclaimer">Média dos pontos instrumentados, não uma medição oficial representativa de toda a cidade. Com apenas uma estação, o resultado corresponde à leitura dela.</p>}
+                <div className="city-summary-grid">
+                  {([
+                    { key: 'temperatura', title: 'Temperatura média', unit: '°C', Icon: Thermometer, color: '#ffad61' },
+                    { key: 'umidade', title: 'Umidade média', unit: '%', Icon: Droplets, color: '#5aaeff' },
+                    { key: 'vel_vento', title: 'Vento médio', unit: 'km/h', Icon: Wind, color: '#27cf9d' },
+                    { key: 'qual_ar', title: 'Indicador do ar', unit: 'índice', Icon: Activity, color: '#b58bff' },
+                  ] as const).map((indicator) => (
+                    <article className="card city-summary-card" key={indicator.key}>
+                      <div className="city-card-heading">
+                        <span>{indicator.title}</span>
+                        <indicator.Icon size={16} style={{ color: indicator.color }}/>
+                      </div>
+                      <strong>{formattedMeasure(overviewAnalytics?.averages[indicator.key], indicator.unit)}</strong>
+                      <small>{overviewAnalytics?.samplesByMetric[indicator.key] ?? 0} estação(ões)</small>
+                    </article>
+                  ))}
+                </div>
 
-            {analyticsLoading && !overviewAnalytics && <div className="card measurement-empty">Carregando histórico do período...</div>}
-            {overviewAnalytics && <MeasurementCharts
-              points={overviewAnalytics.series}
-              heading={overviewCity ? 'Evolução das médias entre estações' : 'Histórico da estação selecionada'}
-              description={`Período filtrado · faixas de ${overviewAnalytics.bucketMinutes} minuto(s) · cada estação tem peso igual em cada faixa.`}
-            />}
+                <div className="city-summary-footnote">
+                  <span><RadioTower size={14}/> {connected} online de {total} cadastradas · {(dashboard?.stations ?? []).filter((item) => item.computedStatus !== 'ONLINE' || item.serviceStatus !== 'RUNNING').length} em atenção/offline</span>
+                  <span>Última leitura: {formatDate(overviewAnalytics?.snapshotAt)}</span>
+                </div>
+                {overviewCity && <p className="city-disclaimer">
+                  Média dos pontos monitorados, não de toda a cidade. Cada estação com leitura válida e recente tem peso igual.
+                </p>}
+              </section>
+
+              <section className="overview-charts-column" aria-label="Evolução histórica do clima">
+                {analyticsLoading && !overviewAnalytics && <div className="card measurement-empty">Carregando histórico do período...</div>}
+                {overviewAnalytics && <MeasurementCharts
+                  compact
+                  points={overviewAnalytics.series}
+                  heading={overviewCity ? 'Evolução das médias entre estações' : 'Histórico da estação selecionada'}
+                  description={`Histórico no período selecionado · intervalos de ${overviewAnalytics.bucketMinutes} minuto(s)`}
+                />}
+              </section>
+            </div>
 
             <OperationMap
               stations={mappedStations}
