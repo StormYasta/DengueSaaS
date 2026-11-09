@@ -38,6 +38,16 @@ function numeric(value: unknown, metric: MetricKey): number | null {
   return value >= 0 && value <= 100_000 ? value : null;
 }
 
+function sampleTimestamp(event: { createdAt: Date; metadata: Prisma.JsonValue | null }): number {
+  const value = event.metadata && typeof event.metadata === 'object' && !Array.isArray(event.metadata)
+    ? (event.metadata as Record<string, unknown>).collectedAt : null;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return event.createdAt.getTime();
+}
+
 function valuesFromPayload(raw: Prisma.JsonValue | null): Values {
   const payload = raw && typeof raw === 'object' && !Array.isArray(raw)
     ? raw as Record<string, unknown> : {};
@@ -146,8 +156,10 @@ export async function analyticsRoutes(app: FastifyInstance) {
       });
       for (const event of recent) {
         if (!event.stationId || latestSnapshots.has(event.stationId)) continue;
+        const sampledAt = sampleTimestamp(event);
+        if (sampledAt < now - FRESH_READING_MS || sampledAt > now + 300_000) continue;
         latestSnapshots.set(event.stationId, {
-          receivedAt: event.createdAt.getTime(),
+          receivedAt: sampledAt,
           values: valuesFromPayload(event.metadata),
         });
       }
@@ -175,7 +187,9 @@ export async function analyticsRoutes(app: FastifyInstance) {
 
       for (const event of events) {
         if (!event.stationId) continue;
-        const at = Math.floor(event.createdAt.getTime() / period.bucketMs) * period.bucketMs;
+        const sampledAt = sampleTimestamp(event);
+        if (sampledAt < period.from.getTime() || sampledAt > period.to.getTime()) continue;
+        const at = Math.floor(sampledAt / period.bucketMs) * period.bucketMs;
         const key = `${event.stationId}:${at}`;
         let bucket = stationBuckets.get(key);
         if (!bucket) {
@@ -246,8 +260,8 @@ export async function analyticsRoutes(app: FastifyInstance) {
       samplesByMetric,
       series,
       systemSeries,
-      // Recebimento é o carimbo temporal dos gráficos; MQTT e CSV não são alterados.
-      timeBasis: 'receivedAt',
+      // Preferência pelo horário original da coleta; legado usa recebimento como fallback.
+      timeBasis: 'sampledAtWithReceiveFallback',
     };
   });
 }
