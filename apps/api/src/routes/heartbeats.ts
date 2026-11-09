@@ -116,7 +116,7 @@ export async function heartbeatRoutes(app: FastifyInstance) {
     });
 
     if (body.sensorPayload) {
-      const metadata = JSON.parse(JSON.stringify(body.sensorPayload));
+      const metadata = { ...body.sensorPayload, collectedAt: (body.lastCollectionAt ?? now).toISOString() };
 
       await prisma.event.create({
         data: {
