@@ -161,7 +161,7 @@ export async function accessGuard(request: FastifyRequest, reply: FastifyReply) 
 
   if (request.method === 'GET' || request.method === 'HEAD') return;
   if (role === 'OPERADOR' && request.method === 'POST' &&
-      /^\\/api\\/stations\\/[^/]+\\/restart$/.test(route) &&
+      route.startsWith('/api/stations/') && route.endsWith('/restart') && route.split('/').length === 5 &&
       request.body && typeof request.body === 'object' &&
       (request.body as { action?: unknown }).action === 'RESTART_COLLECTOR') {
     return;
