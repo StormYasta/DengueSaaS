@@ -1276,3 +1276,40 @@ body[data-theme='light'] .period-custom-row input { color-scheme: light; }
   .measurement-section.compact .measurement-grid { grid-template-columns: 1fr; }
   .overview-summary-column .city-summary-footnote { display: grid; }
 }
+
+
+/* Resumo sem redundância: operação atual + extremos do recorte histórico */
+.overview-summary-column .overview-insight-symbol {
+  color: var(--accent);
+  flex: none;
+}
+.overview-summary-column .city-summary-card {
+  min-height: 142px;
+}
+.overview-summary-column .city-summary-card > strong {
+  font-size: clamp(18px, 1.5vw, 24px);
+  letter-spacing: -.035em;
+}
+.overview-summary-column .city-summary-card > small {
+  font-size: 9.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.overview-summary-column .city-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 12px;
+  line-height: 1.5;
+}
+.overview-summary-column .city-disclaimer svg {
+  color: var(--accent);
+  flex: none;
+  margin-top: 1px;
+}
+@media (max-width: 1100px) {
+  .overview-summary-column .city-summary-card { min-height: 122px; }
+}
+@media (max-width: 680px) {
+  .overview-summary-column .city-summary-card { min-height: 134px; }
+}
