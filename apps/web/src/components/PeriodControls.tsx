@@ -35,7 +35,13 @@ export function PeriodControls({
   function chooseRange(range: RangePreset) {
     setValidation('');
     if (range === 'custom') {
-      onChange({ range: 'custom', from: new Date(from).toISOString(), to: new Date(to).toISOString() });
+      const start = new Date(from);
+      const end = new Date(to);
+      if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
+        setValidation('Preencha as datas para ativar o período personalizado.');
+        return;
+      }
+      onChange({ range: 'custom', from: start.toISOString(), to: end.toISOString() });
     } else {
       onChange({ range });
     }
