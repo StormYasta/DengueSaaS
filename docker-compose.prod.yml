@@ -29,7 +29,6 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
       OFFLINE_AFTER_SECONDS: ${OFFLINE_AFTER_SECONDS:-120}
       STATION_API_KEY: ${STATION_API_KEY:-}
-      ADMIN_API_KEY: ${ADMIN_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
