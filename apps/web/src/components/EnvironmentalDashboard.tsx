@@ -87,7 +87,8 @@ export function EnvironmentalDashboard({
   const relativePressure = positive(current.pressao_rel);
 
   const windSpeed = available(current.vel_vento);
-  const windDirection = available(current.dir_vento);
+  // Em calmaria a direção não é fisicamente significativa.
+  const windDirection = windSpeed === 0 ? null : available(current.dir_vento);
   const windRpm = available(current.anemometro_rpm);
   const windPulses = available(current.anemometro_pulsos);
   const windWindow = available(current.anemometro_intervalo_s);
@@ -188,28 +189,28 @@ export function EnvironmentalDashboard({
             </div>
           </div>
 
-          <div className="wind-technical-values">
-            <div>
+          {(windRpm !== null || windPulses !== null || windWindow !== null) && <div className="wind-technical-values">
+            {windRpm !== null && <div>
               <RotateCw size={18} />
               <span>
                 <small>Rotação</small>
                 <strong>{formatValue(windRpm, ' RPM', 2)}</strong>
               </span>
-            </div>
-            <div>
+            </div>}
+            {windPulses !== null && <div>
               <Gauge size={18} />
               <span>
                 <small>Pulsos</small>
                 <strong>{formatValue(windPulses, '', 0)}</strong>
               </span>
-            </div>
-            <div>
+            </div>}
+            {windWindow !== null && <div>
               <Timer size={18} />
               <span>
                 <small>Janela</small>
                 <strong>{formatValue(windWindow, ' s', 2)}</strong>
               </span>
-            </div>
+            </div>}
             <div>
               <Compass size={18} />
               <span>
@@ -217,7 +218,7 @@ export function EnvironmentalDashboard({
                 <strong>0° = Norte</strong>
               </span>
             </div>
-          </div>
+          </div>}
         </div>
       </div>
 
