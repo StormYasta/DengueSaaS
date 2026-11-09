@@ -1,12 +1,17 @@
+import { useEffect, useState } from 'react';
+import { geoJSON } from 'leaflet';
+import type { Feature } from 'geojson';
+import { Layers3, MapPinned } from 'lucide-react';
 import {
   CircleMarker,
+  GeoJSON,
   MapContainer,
   Popup,
   TileLayer,
   useMap,
 } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Station } from '../services/api';
+import { RegionMapResponse, Station } from '../services/api';
 import {
   formatDuration,
   formatPercent,
@@ -16,7 +21,23 @@ import {
 type OperationMapProps = {
   stations: Station[];
   onSelect: (stationId: string) => void;
+  regions?: RegionMapResponse | null;
+  selectedRegion?: string;
+  onRegionSelect?: (regionName: string) => void;
 };
+
+const palette = [
+  '#9d87fa', '#39b7a4', '#faa96b', '#6aa5ff', '#d888d7',
+  '#74c79a', '#e9c16a', '#8da0ff', '#c8859b', '#61cad7',
+];
+const regionNames = [
+  'Bosque', 'Central', 'CEU', 'Cidade da Criança', 'HB',
+  'Pinheirinho', 'Represa', 'Schmitt', 'Talhado', 'Vila Toninho',
+];
+function regionColor(name: string) {
+  const idx = regionNames.indexOf(name);
+  return palette[idx >= 0 ? idx : 0];
+}
 
 const center: [number, number] = [-20.8197, -49.3794];
 
@@ -37,35 +58,55 @@ function formatWind(value?: number | null) {
   return `${value.toFixed(1)} km/h`;
 }
 
-function FitMapBounds({ stations }: { stations: Station[] }) {
+function FitMapBounds({ stations, skip }: { stations: Station[]; skip: boolean }) {
   const map = useMap();
-  const points = stations
-    .filter(
-      (station) =>
-        typeof station.latitude === 'number' &&
-        typeof station.longitude === 'number',
-    )
-    .map(
-      (station) =>
-        [station.latitude as number, station.longitude as number] as [
-          number,
-          number,
-        ],
-    );
+  const signature = stations
+    .filter((station) => typeof station.latitude === 'number' && typeof station.longitude === 'number')
+    .map((station) => `${station.latitude},${station.longitude}`)
+    .sort().join('|');
 
-  if (points.length > 1) {
-    window.setTimeout(() => {
-      map.fitBounds(points, { padding: [34, 34], maxZoom: 13 });
-    }, 0);
-  }
+  useEffect(() => {
+    if (skip) return;
+    const points = signature.split('|').filter(Boolean).map((point) =>
+      point.split(',').map(Number) as [number, number]);
+    if (points.length > 1) map.fitBounds(points, { padding: [34, 34], maxZoom: 13 });
+  }, [map, signature, skip]);
 
+  return null;
+}
+
+function FitRegionBounds({ regions, selectedRegion, show }: {
+  regions?: RegionMapResponse | null;
+  selectedRegion: string;
+  show: boolean;
+}) {
+  const map = useMap();
+  const geojson = regions?.geojson;
+  const timestamp = regions?.updatedAt;
+
+  useEffect(() => {
+    if (!geojson || !show) return;
+    const features = selectedRegion
+      ? geojson.features.filter((feature) => feature.properties.name === selectedRegion)
+      : geojson.features;
+    if (!features.length) return;
+    const selectedCollection = { ...geojson, features };
+    const bounds = geoJSON(selectedCollection).getBounds();
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [25, 25], maxZoom: 13 });
+  }, [map, geojson, timestamp, selectedRegion, show]);
   return null;
 }
 
 export function OperationMap({
   stations,
   onSelect,
+  regions,
+  selectedRegion = '',
+  onRegionSelect,
 }: OperationMapProps) {
+  const [showRegions, setShowRegions] = useState(true);
+  const polygons = regions?.geojson;
+  const hasRegions = Boolean(polygons?.features.length);
   const mappedStations = stations.filter(
     (station) =>
       typeof station.latitude === 'number' &&
@@ -82,10 +123,26 @@ export function OperationMap({
             Clique em uma estação para consultar o dashboard ambiental.
           </p>
         </div>
-        <div className="map-legend">
-          <span><i className="dot success" /> Saudável</span>
-          <span><i className="dot warning" /> Atenção</span>
-          <span><i className="dot danger" /> Offline</span>
+        <div className="map-header-actions">
+          <div className="map-legend">
+            <span><i className="dot success" /> Saudável</span>
+            <span><i className="dot warning" /> Atenção</span>
+            <span><i className="dot danger" /> Offline</span>
+          </div>
+          {hasRegions && <button type="button" className={`map-layer-switch ${showRegions ? 'active' : ''}`}
+            aria-pressed={showRegions} onClick={() => {
+              if (showRegions && selectedRegion && onRegionSelect) onRegionSelect('');
+              setShowRegions(!showRegions);
+            }}>
+            <Layers3 size={16} /> {showRegions ? 'Ocultar regiões' : 'Mostrar regiões'}
+          </button>}
+          {hasRegions && onRegionSelect && <label className="map-region-picker">
+            <MapPinned size={15}/>
+            <select value={selectedRegion} onChange={(e) => onRegionSelect(e.target.value)} aria-label="Filtrar microregião">
+              <option value="">Todas as regiões</option>
+              {regionNames.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>}
         </div>
       </div>
 
@@ -101,7 +158,29 @@ export function OperationMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          <FitMapBounds stations={mappedStations} />
+          <FitMapBounds stations={mappedStations} skip={showRegions && hasRegions}/>
+          <FitRegionBounds regions={regions} selectedRegion={selectedRegion} show={showRegions}/>
+
+          {showRegions && polygons && <GeoJSON
+            key={`${regions?.updatedAt ?? ''}-${selectedRegion}`}
+            data={polygons}
+            style={(feature) => {
+              const name = String(feature?.properties?.name ?? '');
+              const selected = selectedRegion === name;
+              return {
+                color: regionColor(name),
+                weight: selected ? 3.8 : 1.8,
+                fillColor: regionColor(name),
+                fillOpacity: selected ? 0.23 : 0.095,
+                opacity: selected ? 1 : 0.85,
+              };
+            }}
+            onEachFeature={(feature: Feature, layer) => {
+              const name = String(feature.properties?.name ?? '');
+              layer.bindTooltip(name, { sticky: true, direction: 'top' });
+              if (onRegionSelect) layer.on('click', () => onRegionSelect(selectedRegion === name ? '' : name));
+            }}
+          />}
 
           {mappedStations.map((station) => {
             const markerColor = getMarkerColor(station);
@@ -159,6 +238,12 @@ export function OperationMap({
             );
           })}
         </MapContainer>
+      </div>
+      <div className="region-map-source">
+        {hasRegions
+          ? <span>Divisão municipal em 10 regiões · camada importada de base geográfica. {regions?.source ? `Fonte declarada: ${regions.source}` : 'Fonte não informada.'}</span>
+          : <span>Camada das 10 regiões ainda não importada. Adicione a malha GeoJSON oficial em Configurações.</span>}
+        <a href="https://sig.riopreto.sp.gov.br/portal/home/" target="_blank" rel="noreferrer">SIG Rio Preto</a>
       </div>
     </div>
   );

@@ -750,3 +750,33 @@ body[data-theme='light'] .period-custom-row input { color-scheme: light; }
   .period-custom-row label { width: 100%; justify-content: space-between; }
   .period-custom-row input { flex: 1; max-width: 70%; }
 }
+
+
+/* Camada municipal das 10 regiões no Leaflet */
+.map-header-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 11px; }
+.map-header-actions .map-legend { width: 100%; justify-content: flex-end; }
+.map-layer-switch,
+.map-region-picker {
+  display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border);
+  color: var(--muted); background: var(--panel-soft); padding: 10px 12px; border-radius: 9px; font-size: 12px;
+}
+.map-layer-switch.active { color: var(--accent); border-color: rgba(155,138,251,.35); background: var(--accent-soft); }
+.map-region-picker select { min-width: 125px; background: transparent; color: var(--text); border: 0; outline: none; font-size: 12px; }
+.map-region-picker option { color: var(--text); background: var(--panel); }
+.region-map-source { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  color: var(--muted); font-size: 11px; padding: 12px 4px 1px; line-height: 1.6; }
+.region-map-source a, .region-source-link { color: var(--accent); text-decoration: none; font-weight: 700; }
+.region-map-source a:hover, .region-source-link:hover { text-decoration: underline; }
+.regional-filter-note { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin: 0 0 24px;
+  background: var(--accent-soft); padding: 12px 17px; border-radius: 11px; color: var(--text); font-size: 12px; }
+.regional-filter-note span { display: inline-flex; align-items: center; gap: 8px; }
+.regional-filter-note button { border: 0; color: var(--accent); background: transparent; font-weight: 800; font-size: 12px; white-space: nowrap; }
+.region-import-status { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 17px; }
+.region-import-status small { color: var(--muted); font-size: 11px; }
+.region-settings-card .station-edit-form input[type='file'] { cursor: pointer; }
+.region-import-hint { margin: 15px 0 12px !important; }
+@media (max-width: 750px) {
+  .map-header-actions { width: 100%; justify-content: flex-start; }
+  .map-header-actions .map-legend { justify-content: flex-start; }
+  .regional-filter-note { align-items: flex-start; flex-direction: column; }
+}

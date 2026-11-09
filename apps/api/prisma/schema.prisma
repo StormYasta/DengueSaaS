@@ -167,3 +167,12 @@ model AuthSession {
 
   @@index([userId, expiresAt])
 }
+
+model RegionMap {
+  id         String   @id @default("sjrp-10")
+  geojson    Json
+  source     String?
+  updatedBy  String
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+}

@@ -103,7 +103,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return prisma.event.findMany({
       where: { type: { in: [
         'STATION_UPDATED', 'STATION_RESTART_REQUESTED', 'HOST_REBOOT_REQUESTED',
-        'COMMAND_RESULT', 'REBOOT_COMPLETED', 'ADMIN_PASSWORD_CHANGED',
+        'COMMAND_RESULT', 'REBOOT_COMPLETED', 'ADMIN_PASSWORD_CHANGED', 'REGION_MAP_IMPORTED',
       ] } },
       orderBy: { createdAt: 'desc' },
       take: limit,
