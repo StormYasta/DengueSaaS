@@ -77,8 +77,10 @@ export function EnvironmentalDashboard({
     );
   }
 
-  const temperature = available(current.temperatura);
-  const humidity = available(current.umidade);
+  // O DHT22 pode registrar par 0/0 em falha. Não publicar isso como clima real.
+  const dhtError = current.temperatura === 0 && current.umidade === 0;
+  const temperature = dhtError ? null : available(current.temperatura);
+  const humidity = dhtError ? null : available(current.umidade);
   const airQuality = available(current.qual_ar);
   const rainVoltage = available(current.chuva_tensao);
   const absolutePressure = positive(current.pressao_abs);
