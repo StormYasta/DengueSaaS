@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { GeoJSON, MapContainer, TileLayer } from 'react-leaflet';
-import type { RegionMapResponse } from '../services/api';
+import type { Station } from '../services/api';
+import { formatDate } from '../utils/format';
+import { formattedMeasure } from './MeasurementCharts';
 
 type Week = { semana: string; notificacoes: number; temperatura_c: number | null; umidade_pct: number | null; chuva_mm: number | null; vento_ms: number | null };
 type Prediction = { semana_alvo: string; observado: number; persistencia_t: number; INMET: number; SINAN: number; 'INMET + SINAN': number };
@@ -30,7 +31,11 @@ function validate(raw: unknown): Bundle {
   }
   return { ...b, serie: [...b.serie].sort((a,c)=>a.semana.localeCompare(c.semana)), previsoes: [...b.previsoes].sort((a,c)=>a.semana_alvo.localeCompare(c.semana_alvo)) };
 }
-export function EpidemiologyLab({ regions }: { regions: RegionMapResponse | null }) {
+export function EpidemiologyLab({ stations }: { stations: Station[] }) {
+  const reference = stations.find(s => s.slug.trim().toUpperCase() === 'E01');
+  const sensor = reference?.latestSensorPayload;
+  const fresh = reference?.computedStatus === 'ONLINE' && typeof reference.secondsSinceLastData === 'number' && reference.secondsSinceLastData <= 2400;
+  const validDht = !(sensor?.temperatura === 0 && sensor?.umidade === 0);
   const [bundle,setBundle] = useState<Bundle|null>(null);
   const [error,setError] = useState('');
   const [year,setYear] = useState('all');
@@ -60,13 +65,14 @@ export function EpidemiologyLab({ regions }: { regions: RegionMapResponse | null
       {bundle&&<p>Residência em SJRP · DT_NOTIFIC · INMET {bundle.manifesto.estacao_escolhida} · horizonte de 5 semanas</p>}
       <p>Notificações não equivalem a infecções confirmadas. Resultados retrospectivos não constituem alerta operacional.</p>
     </section>
+    <section className="card epi-chart"><h2>Referência climática municipal · E01</h2><p>São José do Rio Preto como unidade única de análise. A estação E01 é uma aproximação provisória das condições municipais, não uma média espacial. O histórico INMET permanece separado para treinamento e avaliação.</p><p>{!reference ? "E01 não encontrada." : fresh ? "Estação online · leitura recente" : "Leitura indisponível ou desatualizada"} · Último dado recebido: {formatDate(reference?.lastDataReceivedAt)}</p><div className="epi-kpis">{[["Temperatura",formattedMeasure(fresh && validDht ? sensor?.temperatura : null,"°C")],["Umidade",formattedMeasure(fresh && validDht ? sensor?.umidade : null,"%")],["Vento",formattedMeasure(fresh && typeof sensor?.vel_vento === "number" && sensor.vel_vento >= 0 ? sensor.vel_vento : null,"km/h")],["MQ-135 · bruto",formattedMeasure(fresh ? sensor?.qual_ar : null,"índice")]].map(([label,value])=><article className="card" key={label}><small>{label}</small><strong>{value}</strong></article>)}</div><p>Leituras atuais não são inseridas nas séries históricas nem usadas automaticamente para inferência. Precipitação em mm exige calibração do pluviômetro.</p></section>
     {bundle&&<>
       <section className="card epi-filters"><label>Ano da semana-alvo / observada <select value={year} onChange={e=>setYear(e.target.value)}><option value="all">Todo o histórico</option>{years.map(y=><option key={y}>{y}</option>)}</select></label></section>
       <div className="epi-kpis">{[['Notificações no recorte',filtered.length?filtered.reduce((s,r)=>s+r.notificacoes,0).toLocaleString('pt-BR'):'—'],['Maior semana observada',peak?peak.notificacoes.toLocaleString('pt-BR'):'—'],['Semana do pico',peak?.semana??'—'],['Semanas disponíveis',String(filtered.length)]].map(([label,value])=><article className="card" key={label}><small>{label}</small><strong>{value}</strong></article>)}</div>
-      <section className="card epi-chart"><h2>Notificações semanais · SINAN</h2><ResponsiveContainer width="100%" height={240}><AreaChart data={filtered}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={45}/><YAxis/><Tooltip/><Area dataKey="notificacoes" stroke="#df7777" fill="#df777733" connectNulls={false} isAnimationActive={false}/></AreaChart></ResponsiveContainer></section>
+      <section className="card epi-chart"><h2>Notificações semanais · SINAN · município de residência</h2><ResponsiveContainer width="100%" height={240}><AreaChart data={filtered}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={45}/><YAxis/><Tooltip/><Area dataKey="notificacoes" stroke="#df7777" fill="#df777733" connectNulls={false} isAnimationActive={false}/></AreaChart></ResponsiveContainer></section>
       <section className="card epi-chart"><h2>Clima antecedente · INMET</h2><div className="epi-filters"><label>Variável <select value={climate} onChange={e=>setClimate(e.target.value as typeof climate)}>{Object.entries(climateLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label><label>Defasagem <select value={lag} onChange={e=>setLag(Number(e.target.value))}>{[0,1,2,3,4,6,8].map(n=><option key={n} value={n}>{n} semana(s)</option>)}</select></label></div><p>Mesmo eixo temporal do gráfico acima; clima da semana t−defasagem. Comparação visual não implica causalidade.</p><ResponsiveContainer width="100%" height={190}><LineChart data={paired}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={45}/><YAxis/><Tooltip/><Line name={climateLabels[climate]} dataKey="clima" stroke="#55b3e6" dot={false} connectNulls={false} isAnimationActive={false}/></LineChart></ResponsiveContainer></section>
       <section className="card epi-chart"><h2>Teste retrospectivo · previsão t+5</h2><label>Modelo <select value={model} onChange={e=>setModel(e.target.value as typeof model)}>{models.map(m=><option key={m} value={m}>{m==='persistencia_t'?'Persistência':m}</option>)}</select></label><p>MAE no recorte: {mae===null?'—':mae.toFixed(2)} notificações/semana · não é previsão futura em tempo real.</p><ResponsiveContainer width="100%" height={240}><LineChart data={test}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana_alvo" minTickGap={45}/><YAxis/><Tooltip/><Legend/><Line name="Observado" dataKey="observado" stroke="#df7777" dot={false} isAnimationActive={false}/><Line name={model} dataKey={model} stroke={colors[models.indexOf(model)]} dot={false} isAnimationActive={false}/></LineChart></ResponsiveContainer></section>
     </>}
-    <section className="card epi-chart"><h2>Distribuição regional · 10 regiões</h2><p>Sem dados epidemiológicos por região. Os totais municipais não podem ser distribuídos artificialmente entre polígonos. Mapa neutro até obter agregados regionais de residência.</p><MapContainer center={[-20.81,-49.38]} zoom={11} style={{height:340,width:'100%'}} scrollWheelZoom={false}><TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors"/>{regions?.geojson&&<GeoJSON data={regions.geojson} style={{color:'#868b96',weight:2,fillOpacity:.08}} onEachFeature={(feature,layer)=>{const name=String(feature.properties?.name??'Região');const label=document.createElement('span');label.textContent=name+' · sem dados';layer.bindTooltip(label);}}/>}</MapContainer></section>
+
   </div>;
 }
