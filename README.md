@@ -1,4 +1,4 @@
-# DengueSaaS — Plataforma de Monitoramento de Estações Climáticas IoT
+# DengueOps — Plataforma de Monitoramento de Estações Climáticas IoT
 
 MVP de uma plataforma web para monitoramento e gerenciamento de estações climáticas baseadas em Raspberry Pi.
 
