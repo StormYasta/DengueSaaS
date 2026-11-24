@@ -60,32 +60,66 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
       if(!r.ok) throw Error(name+' · HTTP '+r.status);
       return r.json();
     }
-    void read('history').then(v=>{if(!controller.signal.aborted){setBundle(validate(v));setYear('all');}}).catch(e=>{if(!controller.signal.aborted)setServerError(String(e));});
+    void read('history').then(v=>{if(!controller.signal.aborted){setBundle(validate(v));}}).catch(e=>{if(!controller.signal.aborted)setServerError(String(e));});
     void read('forecast').then(v=>{if(!controller.signal.aborted)setForecast(validateForecast(v));}).catch(e=>{if(!controller.signal.aborted)setServerError(old=>[old,String(e)].filter(Boolean).join(' | '));});
     return ()=>controller.abort();
   },[revision]);
   const [error,setError] = useState('');
-  const [year,setYear] = useState('all');
+  const [period,setPeriod] = useState('12');
+  const [grain,setGrain] = useState<'week'|'month'|'year'>('week');
+  const [from,setFrom] = useState('');
+  const [to,setTo] = useState('');
   const [climate,setClimate] = useState<'temperatura_c'|'umidade_pct'|'chuva_mm'|'vento_ms'>('temperatura_c');
   const [model,setModel] = useState<typeof models[number]>('INMET + SINAN');
   const [lag,setLag] = useState(0);
   const series = bundle?.serie ?? [];
   const years = [...new Set(series.map(r=>r.semana.slice(0,4)))];
-  const filtered = series.filter(r=>year==='all'||r.semana.startsWith(year));
+  const last = series[series.length-1]?.semana ?? '';
+  const first = series[0]?.semana ?? '';
+  const shift = (date:string, days:number) => { if(!date) return ''; const d=new Date(date+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+days); return d.toISOString().slice(0,10); };
+  const isYear = period.startsWith('year:');
+  const start = period==='custom'?from:isYear?period.slice(5)+'-01-01':period==='all'?first:shift(last,-(Number(period)-1)*7);
+  const end = period==='custom'?to:isYear?period.slice(5)+'-12-31':last;
+  const validRange = !!start && !!end && start<=end;
+  const within = (d:string)=>validRange && d>=start && d<=end;
+  const filtered = series.filter(r=>within(r.semana));
+  const groupKey = (d:string)=>grain==='week'?d:grain==='month'?d.slice(0,7):d.slice(0,4);
+  const grouped = <T,>(rows:T[], date:(r:T)=>string) => {
+    const groups=new Map<string,T[]>();
+    for(const r of rows){const k=groupKey(date(r)); const g=groups.get(k)??[];g.push(r);groups.set(k,g);}
+    return [...groups.entries()];
+  };
+  const notificationChart = grouped(filtered,r=>r.semana).map(([semana,rows])=>({semana,notificacoes:rows.reduce((sum,r)=>sum+r.notificacoes,0)}));
   const climateLabels = {temperatura_c:'Temperatura (°C)',umidade_pct:'Umidade (%)',chuva_mm:'Chuva (mm)',vento_ms:'Vento (m/s)'};
   const byDate = new Map(series.map(r=>[r.semana,r]));
   const paired = filtered.map(r=> {
     const d = new Date(r.semana+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()-lag*7);
     return {...r, clima: byDate.get(d.toISOString().slice(0,10))?.[climate] ?? null};
   });
-  const test = (bundle?.previsoes ?? []).filter(r=>year==='all'||r.semana_alvo.startsWith(year));
+  const climateChart = grouped(paired,r=>r.semana).map(([semana,rows])=>{
+    const values=rows.map(r=>r.clima).filter((v):v is number=>v!==null);
+    return {semana,clima:values.length===rows.length && values.length ? values.reduce((a,b)=>a+b,0)/(climate==='chuva_mm'?1:values.length):null};
+  });
+  const test = (bundle?.previsoes ?? []).filter(r=>within(r.semana_alvo));
+  const testChart = grouped(test,r=>r.semana_alvo).map(([semana_alvo,rows])=>({semana_alvo,observado:rows.reduce((a,r)=>a+r.observado,0),previsto:rows.reduce((a,r)=>a+r[model],0)}));
   const mae = test.length ? test.reduce((s,r)=>s+Math.abs(r.observado-r[model]),0)/test.length : null;
   const peak = filtered.reduce<Week|null>((best,r)=>!best||r.notificacoes>best.notificacoes?r:best,null);
   async function load(file: File) {
-    try { if(file.size>5_000_000) throw Error('Arquivo maior que 5 MB.'); const b=validate(JSON.parse(await file.text())); setBundle(b);setYear('all');setError(''); }
+    try { if(file.size>5_000_000) throw Error('Arquivo maior que 5 MB.'); const b=validate(JSON.parse(await file.text())); setBundle(b);setError(''); }
     catch(e){setError(e instanceof Error?e.message:'Arquivo inválido');}
   }
   return <div className="epi-lab">
+    <section className="card epi-chart"><h2>Filtros globais · histórico epidemiológico</h2>
+      <div className="epi-filters" style={{flexWrap:'wrap',alignItems:'end'}}>
+        <label>Período <select value={period} onChange={e=>{const v=e.target.value;if(v==='custom'){setFrom(start||first);setTo(end||last);}setPeriod(v);}}>{[4,8,12,26,52].map(n=><option key={n} value={String(n)}>Últimas {n} semanas</option>)}<option value="all">Todo o histórico</option>{years.map(y=><option key={y} value={'year:'+y}>Ano {y}</option>)}<option value="custom">Personalizado</option></select></label>
+        <label>Granularidade <select value={grain} onChange={e=>setGrain(e.target.value as typeof grain)}><option value="week">Semanal</option><option value="month">Mensal</option><option value="year">Anual</option></select></label>
+        {period==='custom'&&<><label>Início <input type="date" value={from} min={first} max={last} onChange={e=>setFrom(e.target.value)}/></label><label>Fim <input type="date" value={to} min={first} max={last} onChange={e=>setTo(e.target.value)}/></label></>}
+        <button type="button" onClick={()=>{setPeriod('12');setGrain('week');setFrom('');setTo('');}}>Restaurar filtros</button>
+      </div>
+      <p>{validRange?start+' a '+end+' · '+filtered.length+' semanas disponíveis':'Selecione um intervalo válido.'} · Recorte pela data de encerramento da semana (sábado). Últimas semanas relativas à última observação, não à data de hoje.</p>
+      {bundle&&filtered.length===0&&<p>Nenhuma observação no período selecionado.</p>}
+      <p>Telemetria atual e projeção de cinco horizontes independem deste filtro. Totais mensais/anuais agrupam semanas pela data final e podem representar períodos parciais.</p>
+    </section>
     <section className="card epi-import"><h2>Laboratório epidemiológico · experimental</h2><p>Dados agregados carregados do servidor. A importação manual é opcional e temporária. Nenhum registro individual é necessário.</p>
       <button type="button" onClick={()=>setRevision(n=>n+1)}>Atualizar dados do servidor</button>{serverError&&<p role="alert">{serverError}</p>}<label>Resultados INMET + SINAN <input type="file" accept=".json,application/json" onChange={e=>{const f=e.target.files?.[0];if(f)void load(f);}}/></label>
       {error&&<p role="alert">{error}</p>}
@@ -103,11 +137,11 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
       </>}
     </section>
     {bundle&&<>
-      <section className="card epi-filters"><label>Ano da semana-alvo / observada <select value={year} onChange={e=>setYear(e.target.value)}><option value="all">Todo o histórico</option>{years.map(y=><option key={y}>{y}</option>)}</select></label></section>
+      
       <div className="epi-kpis">{[['Notificações no recorte',filtered.length?filtered.reduce((s,r)=>s+r.notificacoes,0).toLocaleString('pt-BR'):'—'],['Maior semana observada',peak?peak.notificacoes.toLocaleString('pt-BR'):'—'],['Semana do pico',peak?.semana??'—'],['Semanas disponíveis',String(filtered.length)]].map(([label,value])=><article className="card" key={label}><small>{label}</small><strong>{value}</strong></article>)}</div>
-      <section className="card epi-chart"><h2>Notificações semanais · SINAN · município de residência</h2><ResponsiveContainer width="100%" height={240}><AreaChart data={filtered}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={45}/><YAxis/><Tooltip/><Area dataKey="notificacoes" stroke="#df7777" fill="#df777733" connectNulls={false} isAnimationActive={false}/></AreaChart></ResponsiveContainer></section>
-      <section className="card epi-chart"><h2>Clima antecedente · histórico importado</h2><div className="epi-filters"><label>Variável <select value={climate} onChange={e=>setClimate(e.target.value as typeof climate)}>{Object.entries(climateLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label><label>Defasagem <select value={lag} onChange={e=>setLag(Number(e.target.value))}>{[0,1,2,3,4,6,8].map(n=><option key={n} value={n}>{n} semana(s)</option>)}</select></label></div><p>Mesmo eixo temporal do gráfico acima; clima da semana t−defasagem. Comparação visual não implica causalidade.</p><ResponsiveContainer width="100%" height={190}><LineChart data={paired}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={45}/><YAxis/><Tooltip/><Line name={climateLabels[climate]} dataKey="clima" stroke="#55b3e6" dot={false} connectNulls={false} isAnimationActive={false}/></LineChart></ResponsiveContainer></section>
-      <section className="card epi-chart"><h2>Teste retrospectivo · previsão t+5</h2><label>Modelo <select value={model} onChange={e=>setModel(e.target.value as typeof model)}>{models.map(m=><option key={m} value={m}>{m==='persistencia_t'?'Persistência':m}</option>)}</select></label><p>MAE no recorte: {mae===null?'—':mae.toFixed(2)} notificações/semana · não é previsão futura em tempo real.</p><ResponsiveContainer width="100%" height={240}><LineChart data={test}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana_alvo" minTickGap={45}/><YAxis/><Tooltip/><Legend/><Line name="Observado" dataKey="observado" stroke="#df7777" dot={false} isAnimationActive={false}/><Line name={model} dataKey={model} stroke={colors[models.indexOf(model)]} dot={false} isAnimationActive={false}/></LineChart></ResponsiveContainer></section>
+      <section className="card epi-chart"><h2>Notificações · SINAN · município de residência</h2><ResponsiveContainer width="100%" height={240}><AreaChart data={notificationChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={45}/><YAxis/><Tooltip/><Area dataKey="notificacoes" stroke="#df7777" fill="#df777733" connectNulls={false} isAnimationActive={false}/></AreaChart></ResponsiveContainer></section>
+      <section className="card epi-chart"><h2>Clima antecedente · histórico importado</h2><div className="epi-filters"><label>Variável <select value={climate} onChange={e=>setClimate(e.target.value as typeof climate)}>{Object.entries(climateLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label><label>Defasagem <select value={lag} onChange={e=>setLag(Number(e.target.value))}>{[0,1,2,3,4,6,8].map(n=><option key={n} value={n}>{n} semana(s)</option>)}</select></label></div><p>Mesmo eixo temporal do gráfico acima; clima da semana t−defasagem. Temperatura, umidade e vento: média das semanas; chuva: soma. Grupos com valores climáticos ausentes permanecem sem valor. Comparação visual não implica causalidade.</p><ResponsiveContainer width="100%" height={190}><LineChart data={climateChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={45}/><YAxis/><Tooltip/><Line name={climateLabels[climate]} dataKey="clima" stroke="#55b3e6" dot={false} connectNulls={false} isAnimationActive={false}/></LineChart></ResponsiveContainer></section>
+      <section className="card epi-chart"><h2>Teste retrospectivo · previsão t+5</h2><label>Modelo <select value={model} onChange={e=>setModel(e.target.value as typeof model)}>{models.map(m=><option key={m} value={m}>{m==='persistencia_t'?'Persistência':m}</option>)}</select></label><p>MAE semanal no recorte: {mae===null?'—':mae.toFixed(2)} notificações/semana · não é previsão futura em tempo real. {test.length===0?"Sem teste retrospectivo neste período.":""}</p><ResponsiveContainer width="100%" height={240}><LineChart data={testChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana_alvo" minTickGap={45}/><YAxis/><Tooltip/><Legend/><Line name="Observado" dataKey="observado" stroke="#df7777" dot={false} isAnimationActive={false}/><Line name={model} dataKey="previsto" stroke={colors[models.indexOf(model)]} dot={false} isAnimationActive={false}/></LineChart></ResponsiveContainer></section>
     </>}
 
   </div>;
