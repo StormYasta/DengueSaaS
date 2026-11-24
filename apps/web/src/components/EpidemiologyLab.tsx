@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import './EpidemiologyLab.css';
-import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ComposedChart, ReferenceLine, ReferenceArea } from 'recharts';
 import type { Station } from '../services/api';
 import { formatDate } from '../utils/format';
 import { formattedMeasure } from './MeasurementCharts';
@@ -10,7 +10,7 @@ type IoTWeek = { semana:string } & Partial<Record<'temperatura_c'|'umidade_pct'|
 type Prediction = { semana_alvo: string; observado: number; persistencia_t: number; INMET: number; SINAN: number; 'INMET + SINAN': number };
 type Manifest = { municipio_ibge_6: string; campo_municipio: string; campo_data: string; estacao_escolhida: string; horizonte_semanas: number };
 type Bundle = { manifesto: Manifest; serie: Week[]; previsoes: Prediction[] };
-type Forecast = { origem: string; modo: 'epi'|'hybrid'; modelo: string; faixa: string; previsoes: { horizonte: number; semana: string; previsto: number; inferior: number; superior: number; mae_teste: number; mae_persistencia: number }[] };
+type Forecast = { historico_recente?: {semana:string;observado:number|null}[]; origem: string; modo: 'epi'|'hybrid'; modelo: string; faixa: string; previsoes: { horizonte: number; semana: string; previsto: number; inferior: number; superior: number; mae_teste: number; mae_persistencia: number; r2?:number|null; rmse?:number|null; wape?:number|null; skill?:number|null; vies?:number|null; n_teste?:number; teste_inicio?:string; teste_fim?:string }[] };
 function validateForecast(raw: unknown): Forecast {
   const f=raw as Forecast;
   if(!f || !dateValid(f.origem) || !['epi','hybrid'].includes(f.modo) || !Array.isArray(f.previsoes) || f.previsoes.length!==5) throw Error('Previsão incompatível');
@@ -51,6 +51,7 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
   const [bundle,setBundle] = useState<Bundle|null>(null);
   const [iot,setIot] = useState<IoTWeek[]>([]);
   const [climateSource,setClimateSource] = useState<'hybrid'|'iot'|'inmet'>('hybrid');
+  const [forecastHorizon,setForecastHorizon] = useState(5);
   const [forecast,setForecast] = useState<Forecast|null>(null);
   const [serverError,setServerError] = useState('');
   const [revision,setRevision] = useState(0);
@@ -116,6 +117,13 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
   const testChart = grouped(test,r=>r.semana_alvo).map(([semana_alvo,rows])=>({semana_alvo,observado:rows.reduce((a,r)=>a+r.observado,0),previsto:rows.reduce((a,r)=>a+r[model],0)}));
   const mae = test.length ? test.reduce((s,r)=>s+Math.abs(r.observado-r[model]),0)/test.length : null;
   const peak = filtered.reduce<Week|null>((best,r)=>!best||r.notificacoes>best.notificacoes?r:best,null);
+  const metric = forecast?.previsoes.find(r=>r.horizonte===forecastHorizon);
+  const fmtMetric=(v:number|null|undefined,d=2,suffix='')=>typeof v==='number'&&Number.isFinite(v)?v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d})+suffix:'—';
+  const forecastHistory=forecast?(forecast.historico_recente??series.filter(r=>r.semana<=forecast.origem).slice(-12).map(r=>({semana:r.semana,observado:r.notificacoes}))):[];
+  const forecastChart=forecast?[
+    ...forecastHistory.map(r=>({semana:r.semana,observado:r.observado,previsto:r.semana===forecast.origem?r.observado:null,faixa:r.semana===forecast.origem&&r.observado!==null?[r.observado,r.observado]:null})),
+    ...forecast.previsoes.map(r=>({semana:r.semana,observado:null,previsto:r.previsto,faixa:[r.inferior,r.superior]}))
+  ]:[];
   async function load(file: File) {
     try { if(file.size>5_000_000) throw Error('Arquivo maior que 5 MB.'); const b=validate(JSON.parse(await file.text())); setBundle(b);setError(''); }
     catch(e){setError(e instanceof Error?e.message:'Arquivo inválido');}
@@ -143,8 +151,18 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
       {!forecast ? <p>Execute o motor no servidor e atualize os dados.</p> : <>
       <p>Origem: {forecast.origem} · {forecast.modo==='epi'?'SINAN + sazonalidade (sem IoT na inferência)':'Clima híbrido + SINAN'} · Experimental · Não constitui alerta operacional.</p>
       <details className="epi-method"><summary>Limitações e faixa de incerteza</summary><p>Semanas passadas sem observação são estimativas retrospectivas, não previsões novas. Faixa: percentil 90 dos erros absolutos no teste, sem garantia de cobertura.</p></details>
-      <ResponsiveContainer width="100%" height={260}><LineChart data={forecast.previsoes}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana"/><YAxis/><Tooltip/><Legend/><Line dataKey="previsto" name="Estimativa" stroke="#a38af5" strokeWidth={3}/><Line dataKey="inferior" name="Limite inferior" stroke="#8b98a9" strokeDasharray="4 4" dot={false}/><Line dataKey="superior" name="Limite superior" stroke="#8b98a9" strokeDasharray="4 4" dot={false}/></LineChart></ResponsiveContainer>
-      <div style={{overflowX:'auto'}}><table><thead><tr><th>Horizonte</th><th>Semana</th><th>Estimativa</th><th>MAE teste</th><th>MAE persistência</th></tr></thead><tbody>{forecast.previsoes.map(r=><tr key={r.horizonte}><td>t+{r.horizonte}</td><td>{r.semana}</td><td>{Math.round(r.previsto)}</td><td>{r.mae_teste.toFixed(2)}</td><td>{r.mae_persistencia.toFixed(2)}</td></tr>)}</tbody></table></div>
+      <ResponsiveContainer width="100%" height={300}><ComposedChart data={forecastChart} margin={{top:22,right:16,left:0,bottom:0}}>
+        <CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={22} tickFormatter={(v:string)=>v.slice(8,10)+'/'+v.slice(5,7)}/><YAxis domain={[0,'auto']}/><Tooltip/><Legend/>
+        <ReferenceArea x1={forecast.origem} x2={forecast.previsoes[4].semana} fill="#a38af5" fillOpacity={.06}/>
+        <Area dataKey="faixa" name="Faixa experimental" stroke="none" fill="#a38af5" fillOpacity={.23} connectNulls={false} isAnimationActive={false}/>
+        <Line dataKey="observado" name="Notificações observadas" stroke="#55a3e6" strokeWidth={2.5} dot={{r:2}} connectNulls={false} isAnimationActive={false}/>
+        <Line dataKey="previsto" name="Estimativa experimental" stroke="#a38af5" strokeWidth={2.5} strokeDasharray="6 4" dot={{r:3}} connectNulls={false} isAnimationActive={false}/>
+        <ReferenceLine x={forecast.origem} stroke="#8793a8" strokeDasharray="4 4" label={{value:'Origem',position:'top',fill:'#8793a8',fontSize:11}}/>
+      </ComposedChart></ResponsiveContainer>
+      <div className="epi-filters"><label>Desempenho no teste <select value={forecastHorizon} onChange={e=>setForecastHorizon(Number(e.target.value))}>{[1,2,3,4,5].map(h=><option key={h} value={h}>t+{h}</option>)}</select></label><small>{metric?.n_teste?metric.n_teste+' semanas-alvo · '+metric.teste_inicio+' a '+metric.teste_fim:'Reexecute o motor para atualizar as métricas.'}</small></div>
+      <div className="epi-kpis">{[['R²',fmtMetric(metric?.r2,3)],['MAE',fmtMetric(metric?.mae_teste)],['RMSE',fmtMetric(metric?.rmse)],['WAPE',fmtMetric(metric?.wape,1,'%')],['Skill vs persistência',fmtMetric(metric?.skill,1,'%')],['Viés',fmtMetric(metric?.vies)]].map(([label,value])=><article className="card" key={label}><small>{label}</small><strong>{value}</strong></article>)}</div>
+      <details className="epi-method"><summary>Métricas e resultados por horizonte</summary><p>R² pode ser negativo; WAPE é erro percentual, não acurácia. Skill positivo indica melhora sobre a persistência. Viés positivo indica superestimação. MAE, RMSE e viés em notificações por semana.</p>
+      <div style={{overflowX:'auto'}}><table><thead><tr><th>Horizonte</th><th>Semana</th><th>Estimativa</th><th>R²</th><th>MAE</th><th>RMSE</th><th>WAPE</th><th>Skill</th><th>Viés</th><th>MAE persistência</th></tr></thead><tbody>{forecast.previsoes.map(r=><tr key={r.horizonte}><td>t+{r.horizonte}</td><td>{r.semana}</td><td>{Math.round(r.previsto)}</td><td>{fmtMetric(r.r2,3)}</td><td>{fmtMetric(r.mae_teste)}</td><td>{fmtMetric(r.rmse)}</td><td>{fmtMetric(r.wape,1,'%')}</td><td>{fmtMetric(r.skill,1,'%')}</td><td>{fmtMetric(r.vies)}</td><td>{fmtMetric(r.mae_persistencia)}</td></tr>)}</tbody></table></div></details>
       {forecast.previsoes.some(r=>r.mae_teste>r.mae_persistencia)&&<p>A persistência superou o modelo em pelo menos um horizonte. Avaliação experimental, não recomendada para decisões operacionais.</p>}
       </>}
     </section>
