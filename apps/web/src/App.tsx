@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { EnvironmentalDashboard } from './components/EnvironmentalDashboard';
 import { MeasurementCharts } from './components/MeasurementCharts';
+import { EpidemiologyLab } from './components/EpidemiologyLab';
 import { OverviewInsights } from './components/OverviewInsights';
 import { PeriodControls } from './components/PeriodControls';
 import { MetricsChart } from './components/MetricsChart';
@@ -20,12 +21,13 @@ import {
 import { formatDate, formatDuration, formatPercent, formatTemperature } from './utils/format';
 import { belongsToRegion } from './utils/regions';
 
-type Page = 'overview' | 'stations' | 'telemetry' | 'activity' | 'users' | 'settings';
+type Page = 'overview' | 'stations' | 'telemetry' | 'activity' | 'users' | 'settings' | 'epidemiology';
 
 const nav = [
   { key: 'overview' as Page, label: 'Visão geral', Icon: LayoutDashboard },
   { key: 'stations' as Page, label: 'Estações', Icon: RadioTower },
   { key: 'telemetry' as Page, label: 'Telemetria', Icon: ChartNoAxesCombined },
+  { key: 'epidemiology' as Page, label: 'Epidemiologia · Lab', Icon: Activity },
   { key: 'activity' as Page, label: 'Atividades', Icon: Activity },
   { key: 'users' as Page, label: 'Usuários', Icon: Users },
   { key: 'settings' as Page, label: 'Configurações', Icon: Settings2 },
@@ -35,6 +37,7 @@ const pageTitles: Record<Page, { title: string; desc: string }> = {
   overview: { title: 'Central de monitoramento', desc: 'Visão operacional das estações meteorológicas conectadas' },
   stations: { title: 'Gerenciar estações', desc: 'Status, ações remotas e exportações individuais' },
   telemetry: { title: 'Telemetria ambiental', desc: 'Medições e comportamento dos sensores em detalhe' },
+  epidemiology: { title: 'Laboratório epidemiológico', desc: 'Análise histórica SINAN e INMET · experimental' },
   activity: { title: 'Histórico de atividades', desc: 'Auditoria de alterações e comandos administrativos' },
   users: { title: 'Gestão de usuários', desc: 'Cadastre usuários, defina permissões e controle o acesso à plataforma' },
   settings: { title: 'Configurações', desc: 'Segurança, conta administrativa e informações da plataforma' },
@@ -605,6 +608,7 @@ export function App() {
           </>}
 
           {page === 'users' && canAdmin && <UserManagement currentUser={user}/>}
+          {page === 'epidemiology' && <EpidemiologyLab regions={regionMap}/>}
           {page === 'activity' && canAdmin && <div className="card activity-card"><div className="section-heading"><div><h2>Trilha de auditoria</h2><p>Ações realizadas por administradores e agentes</p></div><ShieldCheck size={21}/></div>
             {activity.length ? activity.map((event) => <div className="activity-entry" key={event.id}><div className="activity-mark"><Activity size={16}/></div><div><strong>{event.message}</strong><p>{event.station ? `${event.station.slug} · ${event.station.name}` : 'Plataforma'} · {event.type}</p></div><time>{formatDate(event.createdAt)}</time></div>) : <div className="empty-state"><Bell size={24}/><p>Nenhuma atividade administrativa registrada ainda.</p></div>}
           </div>}
