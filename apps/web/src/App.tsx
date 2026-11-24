@@ -351,7 +351,7 @@ export function App() {
       <div className="auth-brand">
         <div className="brand-glyph"><CloudSun size={36} /></div>
         <span className="eyebrow">Gestão de estações IoT</span>
-        <h1>Dengue<span>SaaS</span></h1>
+        <h1>Dengue<span>Ops</span></h1>
         <p>Uma central para monitorar, administrar e acompanhar sua rede meteorológica em tempo real.</p>
         <div className="auth-highlights">
           <span><ShieldCheck size={17}/> Acesso protegido</span>
@@ -398,7 +398,7 @@ export function App() {
       <aside className={`admin-sidebar ${mobileNav ? 'mobile-open' : ''}`}>
         <div className="sidebar-brand">
           <div className="sidebar-logo"><CloudSun size={25}/></div>
-          <div><strong>DengueSaaS</strong><small>ADMIN CONSOLE</small></div>
+          <div><strong>DengueOps</strong><small>ADMIN CONSOLE</small></div>
           <button className="mobile-only icon-button" onClick={() => setMobileNav(false)} aria-label="Fechar menu"><X size={19}/></button>
         </div>
         <div className="sidebar-overline">WORKSPACE</div>
@@ -649,7 +649,7 @@ export function App() {
               <a className="region-source-link" href="https://sig.riopreto.sp.gov.br/portal/home/"
                 target="_blank" rel="noreferrer">Abrir SIG Rio Preto</a>
             </div>}
-            <div className="card settings-card"><div className="settings-icon"><Server size={23}/></div><h2>Ambiente</h2><p>DengueSaaS Administrative Console</p><div className="settings-info"><span>Conta</span><strong>{user.username}</strong><span>Perfil</span><strong>{user.role === 'ADMIN' ? 'Administrador' : user.role === 'OPERADOR' ? 'Operador' : 'Visualizador'}</strong><span>Monitoramento</span><strong>A cada 15 segundos</strong></div></div>
+            <div className="card settings-card"><div className="settings-icon"><Server size={23}/></div><h2>Ambiente</h2><p>DengueOps Administrative Console</p><div className="settings-info"><span>Conta</span><strong>{user.username}</strong><span>Perfil</span><strong>{user.role === 'ADMIN' ? 'Administrador' : user.role === 'OPERADOR' ? 'Operador' : 'Visualizador'}</strong><span>Monitoramento</span><strong>A cada 15 segundos</strong></div></div>
           </div>}
         </div>
       </div>
