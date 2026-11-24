@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.pipeline import Pipeline
+from sklearn.metrics import r2_score
 from sklearn.impute import SimpleImputer
 from sklearn.ensemble import HistGradientBoostingRegressor
 
@@ -70,12 +71,22 @@ def run(history, iot, cutoff, mode='auto'):
         m=model().fit(x.loc[train],y.loc[train])
         pred=np.maximum(0,m.predict(x.loc[test]))
         errors=np.abs(y.loc[test].to_numpy()-pred)
-        baseline=float(np.mean(np.abs(y.loc[test]-data.notificacoes.loc[test])))
+        actual=y.loc[test].to_numpy(dtype=float)
+        baseline=float(np.mean(np.abs(actual-data.notificacoes.loc[test].to_numpy())))
+        mae=float(errors.mean())
+        denom=float(np.abs(actual).sum())
+        metrics={"r2":round(float(r2_score(actual,pred)),4) if np.var(actual)>0 else None,
+                 "rmse":round(float(np.sqrt(np.mean((pred-actual)**2))),2),
+                 "wape":round(100*float(errors.sum())/denom,2) if denom>0 else None,
+                 "skill":round(100*(1-mae/baseline),2) if baseline>0 else None,
+                 "vies":round(float(np.mean(pred-actual)),2),
+                 "n_teste":len(test),"teste_inicio":str((test[0]+pd.Timedelta(weeks=h)).date()),
+                 "teste_fim":str((test[-1]+pd.Timedelta(weeks=h)).date())}
         m=model().fit(x.loc[indices],y.loc[indices])
         p=float(max(0,m.predict(x.iloc[[-1]])[0]))
         radius=float(np.quantile(errors,.9))
-        result.append({"horizonte":h,"semana":str((cutoff+pd.Timedelta(weeks=h)).date()),"previsto":round(p,1),"inferior":round(max(0,p-radius),1),"superior":round(p+radius,1),"mae_teste":round(float(errors.mean()),2),"mae_persistencia":round(baseline,2)})
-    return {"modelo":"HistGradientBoostingRegressor","modo":used,"substituicoes_utilizadas_no_modelo":replaced if used=="hybrid" else {},"origem":str(cutoff.date()),"experimental":True,"faixa":"percentil 90 dos erros absolutos no holdout; sem garantia de cobertura","substituicoes_iot":replaced,"previsoes":result}
+        result.append({"horizonte":h,"semana":str((cutoff+pd.Timedelta(weeks=h)).date()),"previsto":round(p,1),"inferior":round(max(0,p-radius),1),"superior":round(p+radius,1),"mae_teste":round(float(errors.mean()),2),"mae_persistencia":round(baseline,2),**metrics})
+    return {"modelo":"HistGradientBoostingRegressor","modo":used,"substituicoes_utilizadas_no_modelo":replaced if used=="hybrid" else {},"origem":str(cutoff.date()),"observado_origem":float(data.notificacoes.iloc[-1]),"historico_recente":[{"semana":str(d.date()),"observado":float(v) if pd.notna(v) else None} for d,v in data.notificacoes.tail(12).items()],"experimental":True,"faixa":"percentil 90 dos erros absolutos no holdout; sem garantia de cobertura","substituicoes_iot":replaced,"previsoes":result}
 
 if __name__=="__main__":
     p=argparse.ArgumentParser()
