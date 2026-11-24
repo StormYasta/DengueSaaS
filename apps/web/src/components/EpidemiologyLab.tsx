@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import './EpidemiologyLab.css';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import type { Station } from '../services/api';
 import { formatDate } from '../utils/format';
@@ -109,28 +110,28 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
     catch(e){setError(e instanceof Error?e.message:'Arquivo inválido');}
   }
   return <div className="epi-lab">
-    <section className="card epi-chart"><h2>Filtros globais · histórico epidemiológico</h2>
+    <section className="card epi-compact-filters">
       <div className="epi-filters" style={{flexWrap:'wrap',alignItems:'end'}}>
         <label>Período <select value={period} onChange={e=>{const v=e.target.value;if(v==='custom'){setFrom(start||first);setTo(end||last);}setPeriod(v);}}>{[4,8,12,26,52].map(n=><option key={n} value={String(n)}>Últimas {n} semanas</option>)}<option value="all">Todo o histórico</option>{years.map(y=><option key={y} value={'year:'+y}>Ano {y}</option>)}<option value="custom">Personalizado</option></select></label>
         <label>Granularidade <select value={grain} onChange={e=>setGrain(e.target.value as typeof grain)}><option value="week">Semanal</option><option value="month">Mensal</option><option value="year">Anual</option></select></label>
         {period==='custom'&&<><label>Início <input type="date" value={from} min={first} max={last} onChange={e=>setFrom(e.target.value)}/></label><label>Fim <input type="date" value={to} min={first} max={last} onChange={e=>setTo(e.target.value)}/></label></>}
-        <button type="button" onClick={()=>{setPeriod('12');setGrain('week');setFrom('');setTo('');}}>Restaurar filtros</button>
+        <button className="epi-compact-button" type="button" onClick={()=>{setPeriod('12');setGrain('week');setFrom('');setTo('');}}>Restaurar</button>
+        <button className="epi-compact-button" type="button" onClick={()=>setRevision(n=>n+1)}>Atualizar dados</button>
       </div>
-      <p>{validRange?start+' a '+end+' · '+filtered.length+' semanas disponíveis':'Selecione um intervalo válido.'} · Recorte pela data de encerramento da semana (sábado). Últimas semanas relativas à última observação, não à data de hoje.</p>
+      <p>{validRange?start+' a '+end+' · '+filtered.length+' semanas disponíveis':'Selecione um intervalo válido.'} · Semanas encerradas no sábado.</p>
       {bundle&&filtered.length===0&&<p>Nenhuma observação no período selecionado.</p>}
-      <p>Telemetria atual e projeção de cinco horizontes independem deste filtro. Totais mensais/anuais agrupam semanas pela data final e podem representar períodos parciais.</p>
+
     </section>
-    <section className="card epi-import"><h2>Laboratório epidemiológico · experimental</h2><p>Dados agregados carregados do servidor. A importação manual é opcional e temporária. Nenhum registro individual é necessário.</p>
-      <button type="button" onClick={()=>setRevision(n=>n+1)}>Atualizar dados do servidor</button>{serverError&&<p role="alert">{serverError}</p>}<label>Resultados INMET + SINAN <input type="file" accept=".json,application/json" onChange={e=>{const f=e.target.files?.[0];if(f)void load(f);}}/></label>
-      {error&&<p role="alert">{error}</p>}
-      {bundle&&<p>Residência em SJRP · DT_NOTIFIC · INMET {bundle.manifesto.estacao_escolhida} · horizonte de 5 semanas</p>}
-      <p>Notificações não equivalem a infecções confirmadas. Resultados retrospectivos não constituem alerta operacional.</p>
-    </section>
-    <section className="card epi-chart"><h2>Referência climática municipal · E01</h2><p>São José do Rio Preto como unidade única de análise. A estação E01 é uma aproximação provisória das condições municipais, não uma média espacial. O histórico INMET permanece separado para treinamento e avaliação.</p><p>{!reference ? "E01 não encontrada." : fresh ? "Estação online · leitura recente" : "Leitura indisponível ou desatualizada"} · Último dado recebido: {formatDate(reference?.lastDataReceivedAt)}</p><div className="epi-kpis">{[["Temperatura",formattedMeasure(fresh && validDht ? sensor?.temperatura : null,"°C")],["Umidade",formattedMeasure(fresh && validDht ? sensor?.umidade : null,"%")],["Vento",formattedMeasure(fresh && typeof sensor?.vel_vento === "number" && sensor.vel_vento >= 0 ? sensor.vel_vento : null,"km/h")],["MQ-135 · bruto",formattedMeasure(fresh ? sensor?.qual_ar : null,"índice")]].map(([label,value])=><article className="card" key={label}><small>{label}</small><strong>{value}</strong></article>)}</div><p>Leituras atuais não são inseridas nas séries históricas nem usadas automaticamente para inferência. Precipitação em mm exige calibração do pluviômetro.</p></section>
+    {serverError&&<p role="alert">{serverError}</p>}{error&&<p role="alert">{error}</p>}
+    {bundle&&<div className="epi-kpis">{[['Notificações no recorte',filtered.length?filtered.reduce((s,r)=>s+r.notificacoes,0).toLocaleString('pt-BR'):'—'],['Maior semana observada',peak?peak.notificacoes.toLocaleString('pt-BR'):'—'],['Semana do pico',peak?.semana??'—'],['Semanas disponíveis',String(filtered.length)]].map(([label,value])=><article className="card" key={label}><small>{label}</small><strong>{value}</strong></article>)}</div>}
+    <div className="epi-compact-live">
+      <div className="epi-live-label"><strong>E01 · clima atual</strong><small>{!reference?'Não encontrada':fresh?'Online · '+formatDate(reference.lastDataReceivedAt):'Sem leitura recente'}</small></div>
+      <div className="epi-live-values">{[["Temperatura",formattedMeasure(fresh && validDht ? sensor?.temperatura : null,"°C")],["Umidade",formattedMeasure(fresh && validDht ? sensor?.umidade : null,"%")],["Vento",formattedMeasure(fresh && typeof sensor?.vel_vento === "number" && sensor.vel_vento >= 0 ? sensor.vel_vento : null,"km/h")],["MQ-135 · bruto",formattedMeasure(fresh ? sensor?.qual_ar : null,"índice")]].map(([label,value])=><article className="epi-live-value" key={label}><small>{label}</small><strong>{value}</strong></article>)}</div>
+    </div>
     <section className="card epi-chart"><h2>Projeção municipal · cinco horizontes</h2>
       {!forecast ? <p>Execute o motor no servidor e atualize os dados.</p> : <>
-      <p>Origem: {forecast.origem} · {forecast.modo==='epi'?'SINAN + sazonalidade (sem IoT na inferência)':'Clima híbrido + SINAN'} · Prova de conceito. Semanas passadas sem observação são estimativas retrospectivas de atualização, não previsões novas.</p>
-      <p>Faixa experimental: percentil 90 dos erros absolutos no teste; sem garantia de cobertura. Não constitui alerta operacional.</p>
+      <p>Origem: {forecast.origem} · {forecast.modo==='epi'?'SINAN + sazonalidade (sem IoT na inferência)':'Clima híbrido + SINAN'} · Experimental · Não constitui alerta operacional.</p>
+      <details className="epi-method"><summary>Limitações e faixa de incerteza</summary><p>Semanas passadas sem observação são estimativas retrospectivas, não previsões novas. Faixa: percentil 90 dos erros absolutos no teste, sem garantia de cobertura.</p></details>
       <ResponsiveContainer width="100%" height={260}><LineChart data={forecast.previsoes}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana"/><YAxis/><Tooltip/><Legend/><Line dataKey="previsto" name="Estimativa" stroke="#a38af5" strokeWidth={3}/><Line dataKey="inferior" name="Limite inferior" stroke="#8b98a9" strokeDasharray="4 4" dot={false}/><Line dataKey="superior" name="Limite superior" stroke="#8b98a9" strokeDasharray="4 4" dot={false}/></LineChart></ResponsiveContainer>
       <div style={{overflowX:'auto'}}><table><thead><tr><th>Horizonte</th><th>Semana</th><th>Estimativa</th><th>MAE teste</th><th>MAE persistência</th></tr></thead><tbody>{forecast.previsoes.map(r=><tr key={r.horizonte}><td>t+{r.horizonte}</td><td>{r.semana}</td><td>{Math.round(r.previsto)}</td><td>{r.mae_teste.toFixed(2)}</td><td>{r.mae_persistencia.toFixed(2)}</td></tr>)}</tbody></table></div>
       {forecast.previsoes.some(r=>r.mae_teste>r.mae_persistencia)&&<p>A persistência superou o modelo em pelo menos um horizonte. Avaliação experimental, não recomendada para decisões operacionais.</p>}
@@ -138,11 +139,17 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
     </section>
     {bundle&&<>
       
-      <div className="epi-kpis">{[['Notificações no recorte',filtered.length?filtered.reduce((s,r)=>s+r.notificacoes,0).toLocaleString('pt-BR'):'—'],['Maior semana observada',peak?peak.notificacoes.toLocaleString('pt-BR'):'—'],['Semana do pico',peak?.semana??'—'],['Semanas disponíveis',String(filtered.length)]].map(([label,value])=><article className="card" key={label}><small>{label}</small><strong>{value}</strong></article>)}</div>
+
       <section className="card epi-chart"><h2>Notificações · SINAN · município de residência</h2><ResponsiveContainer width="100%" height={240}><AreaChart data={notificationChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={45}/><YAxis/><Tooltip/><Area dataKey="notificacoes" stroke="#df7777" fill="#df777733" connectNulls={false} isAnimationActive={false}/></AreaChart></ResponsiveContainer></section>
       <section className="card epi-chart"><h2>Clima antecedente · histórico importado</h2><div className="epi-filters"><label>Variável <select value={climate} onChange={e=>setClimate(e.target.value as typeof climate)}>{Object.entries(climateLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label><label>Defasagem <select value={lag} onChange={e=>setLag(Number(e.target.value))}>{[0,1,2,3,4,6,8].map(n=><option key={n} value={n}>{n} semana(s)</option>)}</select></label></div><p>Mesmo eixo temporal do gráfico acima; clima da semana t−defasagem. Temperatura, umidade e vento: média das semanas; chuva: soma. Grupos com valores climáticos ausentes permanecem sem valor. Comparação visual não implica causalidade.</p><ResponsiveContainer width="100%" height={190}><LineChart data={climateChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={45}/><YAxis/><Tooltip/><Line name={climateLabels[climate]} dataKey="clima" stroke="#55b3e6" dot={false} connectNulls={false} isAnimationActive={false}/></LineChart></ResponsiveContainer></section>
       <section className="card epi-chart"><h2>Teste retrospectivo · previsão t+5</h2><label>Modelo <select value={model} onChange={e=>setModel(e.target.value as typeof model)}>{models.map(m=><option key={m} value={m}>{m==='persistencia_t'?'Persistência':m}</option>)}</select></label><p>MAE semanal no recorte: {mae===null?'—':mae.toFixed(2)} notificações/semana · não é previsão futura em tempo real. {test.length===0?"Sem teste retrospectivo neste período.":""}</p><ResponsiveContainer width="100%" height={240}><LineChart data={testChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana_alvo" minTickGap={45}/><YAxis/><Tooltip/><Legend/><Line name="Observado" dataKey="observado" stroke="#df7777" dot={false} isAnimationActive={false}/><Line name={model} dataKey="previsto" stroke={colors[models.indexOf(model)]} dot={false} isAnimationActive={false}/></LineChart></ResponsiveContainer></section>
     </>}
-
+    <details className="card epi-management"><summary>Gerenciamento de dados e metodologia</summary>
+      <p>Histórico agregado do servidor. Importação manual temporária.</p>
+      <label>Resultados INMET + SINAN <input type="file" accept=".json,application/json" onChange={e=>{const f=e.target.files?.[0];if(f)void load(f);}}/></label>
+      {bundle&&<p>Residência em SJRP · DT_NOTIFIC · INMET {bundle.manifesto.estacao_escolhida}.</p>}
+      <p>Notificações não equivalem a casos confirmados. E01 é referência municipal provisória; leituras atuais não alimentam automaticamente a inferência. Precipitação depende de calibração.</p>
+      <p>Filtros afetam apenas histórico e teste retrospectivo. Últimas semanas relativas à última observação. Totais mensais e anuais agrupam semanas pela data final e podem ser parciais.</p>
+    </details>
   </div>;
 }
