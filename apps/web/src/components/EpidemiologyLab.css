@@ -1,0 +1,21 @@
+.epi-lab{gap:10px!important;max-width:none!important}
+.epi-lab .epi-compact-filters{padding:10px 14px}
+.epi-compact-filters .epi-filters{display:flex;gap:10px;align-items:center!important}
+.epi-compact-filters p{margin:6px 0 0;font-size:12px}
+.epi-compact-button{border:1px solid var(--border);border-radius:8px;background:transparent;color:inherit;padding:7px 12px;font:inherit;cursor:pointer}
+.epi-compact-button:hover{opacity:.8}
+.epi-lab .epi-kpis{gap:10px}
+.epi-lab .epi-kpis .card{padding:10px 14px;min-height:0}
+.epi-lab .epi-kpis strong{font-size:21px}
+.epi-compact-live{display:flex;align-items:center;gap:16px;padding:8px 14px;border:1px solid var(--border);border-radius:10px;flex-wrap:wrap}
+.epi-live-label,.epi-live-value{display:flex;flex-direction:column;gap:3px}
+.epi-live-label small,.epi-live-value small{font-size:11px;opacity:.8}
+.epi-live-values{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));flex:1;gap:12px}
+.epi-live-value strong{font-size:17px}
+.epi-lab .epi-chart{padding:12px 14px}
+.epi-lab .epi-chart h2{margin:0 0 8px}
+.epi-lab .epi-chart p{margin:6px 0;font-size:12px}
+.epi-method,.epi-management{font-size:12px}
+.epi-management{padding:10px 14px}
+.epi-method summary,.epi-management summary{cursor:pointer}
+@media(max-width:700px){.epi-live-values{flex-basis:100%;grid-template-columns:repeat(2,minmax(0,1fr))}}
