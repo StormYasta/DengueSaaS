@@ -57,6 +57,8 @@ if (demoMode) {
   app.register(dashboardRoutes, { prefix: '/api' });
   app.register(regionRoutes, { prefix: '/api' });
   app.register(analyticsRoutes, { prefix: '/api' });
+  const { epiClimateRoutes } = await import('./routes/epi-climate.js');
+  app.register(epiClimateRoutes, { prefix: '/api' });
   app.register(stationRoutes, { prefix: '/api' });
   app.register(heartbeatRoutes, { prefix: '/api' });
   app.register(logRoutes, { prefix: '/api' });
