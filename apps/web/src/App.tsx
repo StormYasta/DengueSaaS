@@ -608,7 +608,7 @@ export function App() {
           </>}
 
           {page === 'users' && canAdmin && <UserManagement currentUser={user}/>}
-          {page === 'epidemiology' && <EpidemiologyLab regions={regionMap}/>}
+          {page === 'epidemiology' && <EpidemiologyLab stations={dashboard?.stations ?? []}/>}
           {page === 'activity' && canAdmin && <div className="card activity-card"><div className="section-heading"><div><h2>Trilha de auditoria</h2><p>Ações realizadas por administradores e agentes</p></div><ShieldCheck size={21}/></div>
             {activity.length ? activity.map((event) => <div className="activity-entry" key={event.id}><div className="activity-mark"><Activity size={16}/></div><div><strong>{event.message}</strong><p>{event.station ? `${event.station.slug} · ${event.station.name}` : 'Plataforma'} · {event.type}</p></div><time>{formatDate(event.createdAt)}</time></div>) : <div className="empty-state"><Bell size={24}/><p>Nenhuma atividade administrativa registrada ainda.</p></div>}
           </div>}
