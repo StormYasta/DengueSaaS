@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { ZodError } from 'zod';
@@ -37,6 +38,18 @@ if (demoMode) {
   const { logRoutes } = await import('./routes/logs.js');
   const { stationRoutes } = await import('./routes/stations.js');
 
+  for (const [route, file] of [['history','data/dengueops_epidemiologia_atualizado.json'],['forecast','output/previsao.json']] as const) {
+    app.get('/api/epidemiology/'+route, async (_request, reply) => {
+      try {
+        const raw = await readFile('/epidemiology/'+file, 'utf8');
+        if (Buffer.byteLength(raw)>5_000_000) return reply.code(413).send({message:'Arquivo excede limite'});
+        return reply.header('Cache-Control','no-store').send(JSON.parse(raw));
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code==='ENOENT') return reply.code(404).send({message:'Resultado ainda não disponível'});
+        throw err;
+      }
+    });
+  }
   app.register(authRoutes, { prefix: '/api' });
   app.register(userRoutes, { prefix: '/api' });
   app.register(adminRoutes, { prefix: '/api' });
