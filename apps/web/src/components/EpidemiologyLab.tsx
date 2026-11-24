@@ -6,6 +6,7 @@ import { formatDate } from '../utils/format';
 import { formattedMeasure } from './MeasurementCharts';
 
 type Week = { semana: string; notificacoes: number; temperatura_c: number | null; umidade_pct: number | null; chuva_mm: number | null; vento_ms: number | null };
+type IoTWeek = { semana:string } & Partial<Record<'temperatura_c'|'umidade_pct'|'vento_ms',{value:number;hours:number;source:string}>>;
 type Prediction = { semana_alvo: string; observado: number; persistencia_t: number; INMET: number; SINAN: number; 'INMET + SINAN': number };
 type Manifest = { municipio_ibge_6: string; campo_municipio: string; campo_data: string; estacao_escolhida: string; horizonte_semanas: number };
 type Bundle = { manifesto: Manifest; serie: Week[]; previsoes: Prediction[] };
@@ -48,6 +49,8 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
   const fresh = reference?.computedStatus === 'ONLINE' && typeof reference.secondsSinceLastData === 'number' && reference.secondsSinceLastData <= 2400;
   const validDht = !(sensor?.temperatura === 0 && sensor?.umidade === 0);
   const [bundle,setBundle] = useState<Bundle|null>(null);
+  const [iot,setIot] = useState<IoTWeek[]>([]);
+  const [climateSource,setClimateSource] = useState<'hybrid'|'iot'|'inmet'>('hybrid');
   const [forecast,setForecast] = useState<Forecast|null>(null);
   const [serverError,setServerError] = useState('');
   const [revision,setRevision] = useState(0);
@@ -62,6 +65,7 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
       return r.json();
     }
     void read('history').then(v=>{if(!controller.signal.aborted){setBundle(validate(v));}}).catch(e=>{if(!controller.signal.aborted)setServerError(String(e));});
+    void read('climate').then(v=>{if(!controller.signal.aborted)setIot(Array.isArray(v)?v:[]);}).catch(e=>{if(!controller.signal.aborted)setServerError(old=>[old,String(e)].filter(Boolean).join(' | '));});
     void read('forecast').then(v=>{if(!controller.signal.aborted)setForecast(validateForecast(v));}).catch(e=>{if(!controller.signal.aborted)setServerError(old=>[old,String(e)].filter(Boolean).join(' | '));});
     return ()=>controller.abort();
   },[revision]);
@@ -75,7 +79,7 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
   const [lag,setLag] = useState(0);
   const series = bundle?.serie ?? [];
   const years = [...new Set(series.map(r=>r.semana.slice(0,4)))];
-  const last = series[series.length-1]?.semana ?? '';
+  const last = [series[series.length-1]?.semana ?? '',iot[iot.length-1]?.semana ?? ''].sort().pop() ?? '';
   const first = series[0]?.semana ?? '';
   const shift = (date:string, days:number) => { if(!date) return ''; const d=new Date(date+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+days); return d.toISOString().slice(0,10); };
   const isYear = period.startsWith('year:');
@@ -93,13 +97,20 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
   const notificationChart = grouped(filtered,r=>r.semana).map(([semana,rows])=>({semana,notificacoes:rows.reduce((sum,r)=>sum+r.notificacoes,0)}));
   const climateLabels = {temperatura_c:'Temperatura (°C)',umidade_pct:'Umidade (%)',chuva_mm:'Chuva (mm)',vento_ms:'Vento (m/s)'};
   const byDate = new Map(series.map(r=>[r.semana,r]));
-  const paired = filtered.map(r=> {
-    const d = new Date(r.semana+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()-lag*7);
-    return {...r, clima: byDate.get(d.toISOString().slice(0,10))?.[climate] ?? null};
+  const iotByDate = new Map(iot.map(r=>[r.semana,r]));
+  const dates = new Set([...series.map(r=>r.semana),...iot.map(r=>r.semana)]);
+  const paired = [...dates].filter(within).sort().map(semana=>{
+    const date=shift(semana,-lag*7);
+    const local=climate==='chuva_mm'?undefined:iotByDate.get(date)?.[climate];
+    const imported=byDate.get(date)?.[climate]??null;
+    // O arquivo atualizado já pode conter as cinco semanas IoT; não as rotular INMET.
+    const historicalIoT=local?.source==='IoT histórico';
+    const value=climateSource==='iot'?local?.value??null:climateSource==='inmet'?(historicalIoT?null:imported):local?.value??imported;
+    return {semana,clima:value,source:value===null?'':climateSource!=='inmet'&&local?local.source:'Histórico importado'};
   });
   const climateChart = grouped(paired,r=>r.semana).map(([semana,rows])=>{
     const values=rows.map(r=>r.clima).filter((v):v is number=>v!==null);
-    return {semana,clima:values.length===rows.length && values.length ? values.reduce((a,b)=>a+b,0)/(climate==='chuva_mm'?1:values.length):null};
+    return {semana,clima:values.length===rows.length && values.length ? values.reduce((a,b)=>a+b,0)/(climate==='chuva_mm'?1:values.length):null,fonte:[...new Set(rows.map(r=>r.source).filter(Boolean))].join(' + ')};
   });
   const test = (bundle?.previsoes ?? []).filter(r=>within(r.semana_alvo));
   const testChart = grouped(test,r=>r.semana_alvo).map(([semana_alvo,rows])=>({semana_alvo,observado:rows.reduce((a,r)=>a+r.observado,0),previsto:rows.reduce((a,r)=>a+r[model],0)}));
@@ -141,8 +152,8 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
       
 
       <section className="card epi-chart"><h2>Notificações · SINAN · município de residência</h2><ResponsiveContainer width="100%" height={240}><AreaChart data={notificationChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={45}/><YAxis/><Tooltip/><Area dataKey="notificacoes" stroke="#df7777" fill="#df777733" connectNulls={false} isAnimationActive={false}/></AreaChart></ResponsiveContainer></section>
-      <section className="card epi-chart"><h2>Clima antecedente · histórico importado</h2><div className="epi-filters"><label>Variável <select value={climate} onChange={e=>setClimate(e.target.value as typeof climate)}>{Object.entries(climateLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label><label>Defasagem <select value={lag} onChange={e=>setLag(Number(e.target.value))}>{[0,1,2,3,4,6,8].map(n=><option key={n} value={n}>{n} semana(s)</option>)}</select></label></div><p>Mesmo eixo temporal do gráfico acima; clima da semana t−defasagem. Temperatura, umidade e vento: média das semanas; chuva: soma. Grupos com valores climáticos ausentes permanecem sem valor. Comparação visual não implica causalidade.</p><ResponsiveContainer width="100%" height={190}><LineChart data={climateChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={45}/><YAxis/><Tooltip/><Line name={climateLabels[climate]} dataKey="clima" stroke="#55b3e6" dot={false} connectNulls={false} isAnimationActive={false}/></LineChart></ResponsiveContainer></section>
-      <section className="card epi-chart"><h2>Teste retrospectivo · previsão t+5</h2><label>Modelo <select value={model} onChange={e=>setModel(e.target.value as typeof model)}>{models.map(m=><option key={m} value={m}>{m==='persistencia_t'?'Persistência':m}</option>)}</select></label><p>MAE semanal no recorte: {mae===null?'—':mae.toFixed(2)} notificações/semana · não é previsão futura em tempo real. {test.length===0?"Sem teste retrospectivo neste período.":""}</p><ResponsiveContainer width="100%" height={240}><LineChart data={testChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana_alvo" minTickGap={45}/><YAxis/><Tooltip/><Legend/><Line name="Observado" dataKey="observado" stroke="#df7777" dot={false} isAnimationActive={false}/><Line name={model} dataKey="previsto" stroke={colors[models.indexOf(model)]} dot={false} isAnimationActive={false}/></LineChart></ResponsiveContainer></section>
+      <section className="card epi-chart"><h2>Clima antecedente · fontes integradas</h2><div className="epi-filters"><label>Fonte <select value={climateSource} onChange={e=>setClimateSource(e.target.value as typeof climateSource)}><option value="hybrid">Prioridade IoT</option><option value="iot">Somente IoT</option><option value="inmet">Histórico importado (sem IoT identificado)</option></select></label><label>Variável <select value={climate} onChange={e=>setClimate(e.target.value as typeof climate)}>{Object.entries(climateLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label><label>Defasagem <select value={lag} onChange={e=>setLag(Number(e.target.value))}>{[0,1,2,3,4,6,8].map(n=><option key={n} value={n}>{n} semana(s)</option>)}</select></label></div><p>IoT: semanas encerradas com pelo menos 126 horas válidas. Última semana IoT: {iot[iot.length-1]?.semana??'indisponível'}. Períodos sem cobertura permanecem vazios.</p>{climateChart.some(r=>r.clima!==null)?<ResponsiveContainer width="100%" height={190}><LineChart data={climateChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={45}/><YAxis/><Tooltip labelFormatter={(label)=>String(label)+" · "+(climateChart.find(r=>r.semana===label)?.fonte??"")}/><Line name={climateLabels[climate]} dataKey="clima" stroke="#55b3e6" dot={true} connectNulls={false} isAnimationActive={false}/></LineChart></ResponsiveContainer>:<p>Sem medições válidas neste recorte. Selecione outro período ou fonte.</p>}</section>
+      <section className="card epi-chart"><h2>Teste retrospectivo · previsão t+5</h2><label>Modelo <select value={model} onChange={e=>setModel(e.target.value as typeof model)}>{models.map(m=><option key={m} value={m}>{m==='persistencia_t'?'Persistência':m}</option>)}</select></label><p>MAE semanal no recorte: {mae===null?'—':mae.toFixed(2)} notificações/semana · não é previsão futura em tempo real. {test.length===0?"Sem teste retrospectivo neste período.":""}</p>{test.length>0&&<ResponsiveContainer width="100%" height={240}><LineChart data={testChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana_alvo" minTickGap={45}/><YAxis/><Tooltip/><Legend/><Line name="Observado" dataKey="observado" stroke="#df7777" dot={false} isAnimationActive={false}/><Line name={model} dataKey="previsto" stroke={colors[models.indexOf(model)]} dot={false} isAnimationActive={false}/></LineChart></ResponsiveContainer>}</section>
     </>}
     <details className="card epi-management"><summary>Gerenciamento de dados e metodologia</summary>
       <p>Histórico agregado do servidor. Importação manual temporária.</p>
