@@ -10,7 +10,7 @@ type IoTWeek = { semana:string } & Partial<Record<'temperatura_c'|'umidade_pct'|
 type Prediction = { semana_alvo: string; observado: number; persistencia_t: number; INMET: number; SINAN: number; 'INMET + SINAN': number };
 type Manifest = { municipio_ibge_6: string; campo_municipio: string; campo_data: string; estacao_escolhida: string; horizonte_semanas: number };
 type Bundle = { manifesto: Manifest; serie: Week[]; previsoes: Prediction[] };
-type Forecast = { historico_recente?: {semana:string;observado:number|null}[]; origem: string; modo: 'epi'|'hybrid'; modelo: string; faixa: string; previsoes: { horizonte: number; semana: string; previsto: number; inferior: number|null; superior: number|null; mae_teste: number; mae_persistencia: number; r2?:number|null; rmse?:number|null; wape?:number|null; skill?:number|null; vies?:number|null; n_teste?:number; teste_inicio?:string; teste_fim?:string }[] };
+type Forecast = { historico_recente?: {semana:string;observado:number|null}[]; origem: string; modo: 'epi'|'hybrid'; modelo: string; faixa: string; definicao_alvo?: string; previsoes: { horizonte: number; semana: string; previsto: number; inferior: number|null; superior: number|null; mae_teste: number; mae_persistencia: number; r2?:number|null; rmse?:number|null; wape?:number|null; skill?:number|null; vies?:number|null; n_teste?:number; teste_inicio?:string; teste_fim?:string }[] };
 function validateForecast(raw: unknown): Forecast {
   const f=raw as Forecast;
   if(!f || !dateValid(f.origem) || !['epi','hybrid'].includes(f.modo) || typeof f.modelo!=='string' || !Array.isArray(f.previsoes) || f.previsoes.length!==1 || !/ridge|catboost/i.test(f.modelo)) throw Error('Aguardando artefato do novo modelo t+4');
@@ -120,8 +120,8 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
   const peak = filtered.reduce<Week|null>((best,r)=>!best||r.notificacoes>best.notificacoes?r:best,null);
   const metric = forecast?.previsoes[0];
   const fmtMetric=(v:number|null|undefined,d=2,suffix='')=>typeof v==='number'&&Number.isFinite(v)?v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d})+suffix:'—';
-  const origin = forecast?.origem ?? series[series.length-1]?.semana ?? '';
-  const forecastHistory=forecast?.historico_recente??series.filter(r=>r.semana<=origin).slice(-12).map(r=>({semana:r.semana,observado:r.notificacoes}));
+  const origin = forecast?.origem ?? '';
+  const forecastHistory=forecast?.historico_recente??[];
   const forecastChart=[
     ...forecastHistory.map(r=>({semana:r.semana,observado:r.observado,previsto:null as number|null,faixa:null as number[]|null})),
     ...[1,2,3,4].filter(()=>!!origin).map(h=>({semana:shift(origin,h*7),observado:null,previsto:h===4?metric?.previsto??null:null,faixa:null as number[]|null}))
@@ -164,15 +164,16 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
     </section>
     <section className="card epi-chart"><h2>Projeção municipal · modelo experimental t+4</h2>
       <p>Motor selecionado: {forecast?.modelo??'Ridge (candidato)'} · Origem: {origin||'—'} · Alvo: {origin?shift(origin,28):'—'} · Não constitui alerta operacional.</p>
-      {!forecast&&<p role="status">{forecastNotice}. Histórico disponível; a previsão antiga não será exibida como resultado do novo modelo.</p>}
+      {!forecast&&<p role="status">{forecastNotice}. Aguardando histórico compatível e inferência; a série de notificações anterior permanece nos gráficos históricos.</p>}
       {forecastChart.length>0&&<ResponsiveContainer width="100%" height={300}><ComposedChart data={forecastChart} margin={{top:22,right:16,left:0,bottom:0}}>
         <CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={22} tickFormatter={(v:string)=>v.slice(8,10)+'/'+v.slice(5,7)}/><YAxis domain={[0,'auto']}/><Tooltip/><Legend/>
         {origin&&<ReferenceArea x1={origin} x2={shift(origin,28)} fill="#a38af5" fillOpacity={.06}/>}
-        <Line dataKey="observado" name="Notificações observadas" stroke="#55a3e6" strokeWidth={2.5} dot={{r:2}} connectNulls={false} isAnimationActive={false}/>
+        <Line dataKey="observado" name="Casos observados (início dos sintomas)" stroke="#55a3e6" strokeWidth={2.5} dot={{r:2}} connectNulls={false} isAnimationActive={false}/>
         {forecast&&<Line dataKey="previsto" name="Estimativa t+4" stroke="#a38af5" strokeWidth={2.5} dot={{r:6}} connectNulls={false} isAnimationActive={false}/>}
         {metric&&metric.inferior!==null&&metric.superior!==null&&<ReferenceLine segment={[{x:metric.semana,y:metric.inferior},{x:metric.semana,y:metric.superior}]} stroke="#a38af5" strokeWidth={4} ifOverflow="extendDomain"/>}
         {origin&&<ReferenceLine x={origin} stroke="#8793a8" strokeDasharray="4 4" label={{value:'Origem',position:'top',fill:'#8793a8',fontSize:11}}/>}
       </ComposedChart></ResponsiveContainer>}
+      {forecast?.definicao_alvo&&<p>Alvo: {forecast.definicao_alvo}. Série distinta das notificações por residência.</p>}
       <p>Somente a quarta semana é estimada. As semanas intermediárias não possuem previsão. {metric&&metric.inferior!==null?'Intervalo no ponto t+4: '+fmtMetric(metric.inferior,0)+' a '+fmtMetric(metric.superior,0):'Faixa de incerteza ainda indisponível.'}</p>
       {metric&&<><p>Desempenho informado pelo artefato · {metric.n_teste??'—'} semanas-alvo · {metric.teste_inicio??'—'} a {metric.teste_fim??'—'}</p><div className="epi-kpis">{[['R²',fmtMetric(metric.r2,4)],['MAE',fmtMetric(metric.mae_teste)],['RMSE',fmtMetric(metric.rmse)],['MAE persistência',fmtMetric(metric.mae_persistencia)],['Skill vs persistência',fmtMetric(metric.skill,1,'%')]].map(([label,value])=><article className="card" key={label}><small>{label}</small><strong>{value}</strong></article>)}</div></>}
     </section>
