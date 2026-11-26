@@ -10,14 +10,14 @@ type IoTWeek = { semana:string } & Partial<Record<'temperatura_c'|'umidade_pct'|
 type Prediction = { semana_alvo: string; observado: number; persistencia_t: number; INMET: number; SINAN: number; 'INMET + SINAN': number };
 type Manifest = { municipio_ibge_6: string; campo_municipio: string; campo_data: string; estacao_escolhida: string; horizonte_semanas: number };
 type Bundle = { manifesto: Manifest; serie: Week[]; previsoes: Prediction[] };
-type Forecast = { historico_recente?: {semana:string;observado:number|null}[]; origem: string; modo: 'epi'|'hybrid'; modelo: string; faixa: string; previsoes: { horizonte: number; semana: string; previsto: number; inferior: number; superior: number; mae_teste: number; mae_persistencia: number; r2?:number|null; rmse?:number|null; wape?:number|null; skill?:number|null; vies?:number|null; n_teste?:number; teste_inicio?:string; teste_fim?:string }[] };
+type Forecast = { historico_recente?: {semana:string;observado:number|null}[]; origem: string; modo: 'epi'|'hybrid'; modelo: string; faixa: string; previsoes: { horizonte: number; semana: string; previsto: number; inferior: number|null; superior: number|null; mae_teste: number; mae_persistencia: number; r2?:number|null; rmse?:number|null; wape?:number|null; skill?:number|null; vies?:number|null; n_teste?:number; teste_inicio?:string; teste_fim?:string }[] };
 function validateForecast(raw: unknown): Forecast {
   const f=raw as Forecast;
-  if(!f || !dateValid(f.origem) || !['epi','hybrid'].includes(f.modo) || !Array.isArray(f.previsoes) || f.previsoes.length!==5) throw Error('Previsão incompatível');
-  for(const [i,r] of f.previsoes.entries()){
-    const d=new Date(f.origem+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+7*(i+1));
-    if(r.horizonte!==i+1 || r.semana!==d.toISOString().slice(0,10) || ![r.previsto,r.inferior,r.superior,r.mae_teste,r.mae_persistencia].every(nonnegative) || r.inferior>r.previsto || r.superior<r.previsto) throw Error('Previsão inválida');
-  }
+  if(!f || !dateValid(f.origem) || !['epi','hybrid'].includes(f.modo) || typeof f.modelo!=='string' || !Array.isArray(f.previsoes) || f.previsoes.length!==1 || !/ridge|catboost/i.test(f.modelo)) throw Error('Aguardando artefato do novo modelo t+4');
+  const r=f.previsoes[0];
+  const d=new Date(f.origem+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+28);
+  if(r.horizonte!==4 || r.semana!==d.toISOString().slice(0,10) || ![r.previsto,r.mae_teste,r.mae_persistencia].every(nonnegative)) throw Error('Previsão t+4 inválida');
+  if(!((r.inferior===null&&r.superior===null)||(nonnegative(r.inferior)&&nonnegative(r.superior)&&r.inferior<=r.previsto&&r.superior>=r.previsto))) throw Error('Faixa inválida');
   return f;
 }
 const models = ['persistencia_t','INMET','SINAN','INMET + SINAN'] as const;
@@ -51,8 +51,8 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
   const [bundle,setBundle] = useState<Bundle|null>(null);
   const [iot,setIot] = useState<IoTWeek[]>([]);
   const [climateSource,setClimateSource] = useState<'hybrid'|'iot'|'inmet'>('hybrid');
-  const [forecastHorizon,setForecastHorizon] = useState(5);
   const [forecast,setForecast] = useState<Forecast|null>(null);
+  const [forecastNotice,setForecastNotice] = useState('Carregando projeção t+4…');
   const [serverError,setServerError] = useState('');
   const [revision,setRevision] = useState(0);
   useEffect(()=>{
@@ -60,6 +60,7 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
     const base=import.meta.env.VITE_API_URL ?? '/api';
     setServerError('');
     setForecast(null);
+    setForecastNotice('Carregando projeção t+4…');
     async function read(name:string){
       const r=await fetch(base+'/epidemiology/'+name,{credentials:'same-origin',signal:controller.signal,cache:'no-store'});
       if(!r.ok) throw Error(name+' · HTTP '+r.status);
@@ -67,7 +68,7 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
     }
     void read('history').then(v=>{if(!controller.signal.aborted){setBundle(validate(v));}}).catch(e=>{if(!controller.signal.aborted)setServerError(String(e));});
     void read('climate').then(v=>{if(!controller.signal.aborted)setIot(Array.isArray(v)?v:[]);}).catch(e=>{if(!controller.signal.aborted)setServerError(old=>[old,String(e)].filter(Boolean).join(' | '));});
-    void read('forecast').then(v=>{if(!controller.signal.aborted)setForecast(validateForecast(v));}).catch(e=>{if(!controller.signal.aborted)setServerError(old=>[old,String(e)].filter(Boolean).join(' | '));});
+    void read('forecast').then(v=>{if(!controller.signal.aborted){setForecast(validateForecast(v));setForecastNotice('');}}).catch(e=>{if(!controller.signal.aborted)setForecastNotice(e instanceof Error?e.message:'Projeção indisponível');});
     return ()=>controller.abort();
   },[revision]);
   const [error,setError] = useState('');
@@ -117,13 +118,14 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
   const testChart = grouped(test,r=>r.semana_alvo).map(([semana_alvo,rows])=>({semana_alvo,observado:rows.reduce((a,r)=>a+r.observado,0),previsto:rows.reduce((a,r)=>a+r[model],0)}));
   const mae = test.length ? test.reduce((s,r)=>s+Math.abs(r.observado-r[model]),0)/test.length : null;
   const peak = filtered.reduce<Week|null>((best,r)=>!best||r.notificacoes>best.notificacoes?r:best,null);
-  const metric = forecast?.previsoes.find(r=>r.horizonte===forecastHorizon);
+  const metric = forecast?.previsoes[0];
   const fmtMetric=(v:number|null|undefined,d=2,suffix='')=>typeof v==='number'&&Number.isFinite(v)?v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d})+suffix:'—';
-  const forecastHistory=forecast?(forecast.historico_recente??series.filter(r=>r.semana<=forecast.origem).slice(-12).map(r=>({semana:r.semana,observado:r.notificacoes}))):[];
-  const forecastChart=forecast?[
-    ...forecastHistory.map(r=>({semana:r.semana,observado:r.observado,previsto:r.semana===forecast.origem?r.observado:null,faixa:r.semana===forecast.origem&&r.observado!==null?[r.observado,r.observado]:null})),
-    ...forecast.previsoes.map(r=>({semana:r.semana,observado:null,previsto:r.previsto,faixa:[r.inferior,r.superior]}))
-  ]:[];
+  const origin = forecast?.origem ?? series[series.length-1]?.semana ?? '';
+  const forecastHistory=forecast?.historico_recente??series.filter(r=>r.semana<=origin).slice(-12).map(r=>({semana:r.semana,observado:r.notificacoes}));
+  const forecastChart=[
+    ...forecastHistory.map(r=>({semana:r.semana,observado:r.observado,previsto:null as number|null,faixa:null as number[]|null})),
+    ...[1,2,3,4].filter(()=>!!origin).map(h=>({semana:shift(origin,h*7),observado:null,previsto:h===4?metric?.previsto??null:null,faixa:null as number[]|null}))
+  ];
   async function load(file: File) {
     try { if(file.size>5_000_000) throw Error('Arquivo maior que 5 MB.'); const b=validate(JSON.parse(await file.text())); setBundle(b);setError(''); }
     catch(e){setError(e instanceof Error?e.message:'Arquivo inválido');}
@@ -160,31 +162,26 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
       ].map(([name,r2,mae,rmse])=><tr key={String(name)}><td>{name}</td><td>{fmtMetric(Number(r2),4)}</td><td>{fmtMetric(Number(mae))}</td><td>{fmtMetric(Number(rmse))}</td></tr>)}</tbody></table></div>
       <details className="epi-method"><summary>Metodologia e limitações</summary><p>Alvo: variação logarítmica em quatro semanas; dez atributos epidemiológicos e climáticos. Ridge alpha=100. Métricas relatadas na análise experimental anterior, não recalculadas pela interface. A definição do alvo e o calendário semanal ainda precisam ser harmonizados com o SINAN deste painel. O recorte global não altera esta avaliação fixa. Não representa desempenho prospectivo nem validação independente.</p></details>
     </section>
-    <section className="card epi-chart"><h2>Projeção municipal · cinco horizontes</h2>
-      {!forecast ? <p>Execute o motor no servidor e atualize os dados.</p> : <>
-      <p>Motor da projeção: {forecast.modelo} · Origem: {forecast.origem} · {forecast.modo==='epi'?'SINAN + sazonalidade (sem IoT na inferência)':'Clima híbrido + SINAN'} · Experimental · Não constitui alerta operacional.</p>
-      <details className="epi-method"><summary>Limitações e faixa de incerteza</summary><p>Semanas passadas sem observação são estimativas retrospectivas, não previsões novas. Faixa: percentil 90 dos erros absolutos no teste, sem garantia de cobertura.</p></details>
-      <ResponsiveContainer width="100%" height={300}><ComposedChart data={forecastChart} margin={{top:22,right:16,left:0,bottom:0}}>
+    <section className="card epi-chart"><h2>Projeção municipal · modelo experimental t+4</h2>
+      <p>Motor selecionado: {forecast?.modelo??'Ridge (candidato)'} · Origem: {origin||'—'} · Alvo: {origin?shift(origin,28):'—'} · Não constitui alerta operacional.</p>
+      {!forecast&&<p role="status">{forecastNotice}. Histórico disponível; a previsão antiga não será exibida como resultado do novo modelo.</p>}
+      {forecastChart.length>0&&<ResponsiveContainer width="100%" height={300}><ComposedChart data={forecastChart} margin={{top:22,right:16,left:0,bottom:0}}>
         <CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={22} tickFormatter={(v:string)=>v.slice(8,10)+'/'+v.slice(5,7)}/><YAxis domain={[0,'auto']}/><Tooltip/><Legend/>
-        <ReferenceArea x1={forecast.origem} x2={forecast.previsoes[4].semana} fill="#a38af5" fillOpacity={.06}/>
-        <Area dataKey="faixa" name="Faixa experimental" stroke="none" fill="#a38af5" fillOpacity={.23} connectNulls={false} isAnimationActive={false}/>
+        {origin&&<ReferenceArea x1={origin} x2={shift(origin,28)} fill="#a38af5" fillOpacity={.06}/>}
         <Line dataKey="observado" name="Notificações observadas" stroke="#55a3e6" strokeWidth={2.5} dot={{r:2}} connectNulls={false} isAnimationActive={false}/>
-        <Line dataKey="previsto" name="Estimativa experimental" stroke="#a38af5" strokeWidth={2.5} strokeDasharray="6 4" dot={{r:3}} connectNulls={false} isAnimationActive={false}/>
-        <ReferenceLine x={forecast.origem} stroke="#8793a8" strokeDasharray="4 4" label={{value:'Origem',position:'top',fill:'#8793a8',fontSize:11}}/>
-      </ComposedChart></ResponsiveContainer>
-      <div className="epi-filters"><label>Desempenho no teste <select value={forecastHorizon} onChange={e=>setForecastHorizon(Number(e.target.value))}>{[1,2,3,4,5].map(h=><option key={h} value={h}>t+{h}</option>)}</select></label><small>{metric?.n_teste?metric.n_teste+' semanas-alvo · '+metric.teste_inicio+' a '+metric.teste_fim:'Reexecute o motor para atualizar as métricas.'}</small></div>
-      <div className="epi-kpis">{[['R²',fmtMetric(metric?.r2,3)],['MAE',fmtMetric(metric?.mae_teste)],['RMSE',fmtMetric(metric?.rmse)],['WAPE',fmtMetric(metric?.wape,1,'%')],['Skill vs persistência',fmtMetric(metric?.skill,1,'%')],['Viés',fmtMetric(metric?.vies)]].map(([label,value])=><article className="card" key={label}><small>{label}</small><strong>{value}</strong></article>)}</div>
-      <details className="epi-method"><summary>Métricas e resultados por horizonte</summary><p>R² pode ser negativo; WAPE é erro percentual, não acurácia. Skill positivo indica melhora sobre a persistência. Viés positivo indica superestimação. MAE, RMSE e viés em notificações por semana.</p>
-      <div style={{overflowX:'auto'}}><table><thead><tr><th>Horizonte</th><th>Semana</th><th>Estimativa</th><th>R²</th><th>MAE</th><th>RMSE</th><th>WAPE</th><th>Skill</th><th>Viés</th><th>MAE persistência</th></tr></thead><tbody>{forecast.previsoes.map(r=><tr key={r.horizonte}><td>t+{r.horizonte}</td><td>{r.semana}</td><td>{Math.round(r.previsto)}</td><td>{fmtMetric(r.r2,3)}</td><td>{fmtMetric(r.mae_teste)}</td><td>{fmtMetric(r.rmse)}</td><td>{fmtMetric(r.wape,1,'%')}</td><td>{fmtMetric(r.skill,1,'%')}</td><td>{fmtMetric(r.vies)}</td><td>{fmtMetric(r.mae_persistencia)}</td></tr>)}</tbody></table></div></details>
-      {forecast.previsoes.some(r=>r.mae_teste>r.mae_persistencia)&&<p>A persistência superou o modelo em pelo menos um horizonte. Avaliação experimental, não recomendada para decisões operacionais.</p>}
-      </>}
+        {forecast&&<Line dataKey="previsto" name="Estimativa t+4" stroke="#a38af5" strokeWidth={2.5} dot={{r:6}} connectNulls={false} isAnimationActive={false}/>}
+        {metric&&metric.inferior!==null&&metric.superior!==null&&<ReferenceLine segment={[{x:metric.semana,y:metric.inferior},{x:metric.semana,y:metric.superior}]} stroke="#a38af5" strokeWidth={4} ifOverflow="extendDomain"/>}
+        {origin&&<ReferenceLine x={origin} stroke="#8793a8" strokeDasharray="4 4" label={{value:'Origem',position:'top',fill:'#8793a8',fontSize:11}}/>}
+      </ComposedChart></ResponsiveContainer>}
+      <p>Somente a quarta semana é estimada. As semanas intermediárias não possuem previsão. {metric&&metric.inferior!==null?'Intervalo no ponto t+4: '+fmtMetric(metric.inferior,0)+' a '+fmtMetric(metric.superior,0):'Faixa de incerteza ainda indisponível.'}</p>
+      {metric&&<><p>Desempenho informado pelo artefato · {metric.n_teste??'—'} semanas-alvo · {metric.teste_inicio??'—'} a {metric.teste_fim??'—'}</p><div className="epi-kpis">{[['R²',fmtMetric(metric.r2,4)],['MAE',fmtMetric(metric.mae_teste)],['RMSE',fmtMetric(metric.rmse)],['MAE persistência',fmtMetric(metric.mae_persistencia)],['Skill vs persistência',fmtMetric(metric.skill,1,'%')]].map(([label,value])=><article className="card" key={label}><small>{label}</small><strong>{value}</strong></article>)}</div></>}
     </section>
     {bundle&&<>
       
 
       <section className="card epi-chart"><h2>Notificações · SINAN · município de residência</h2><ResponsiveContainer width="100%" height={240}><AreaChart data={notificationChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={45}/><YAxis/><Tooltip/><Area dataKey="notificacoes" stroke="#df7777" fill="#df777733" connectNulls={false} isAnimationActive={false}/></AreaChart></ResponsiveContainer></section>
       <section className="card epi-chart"><h2>Clima antecedente · fontes integradas</h2><div className="epi-filters"><label>Fonte <select value={climateSource} onChange={e=>setClimateSource(e.target.value as typeof climateSource)}><option value="hybrid">Prioridade IoT</option><option value="iot">Somente IoT</option><option value="inmet">Histórico importado (sem IoT identificado)</option></select></label><label>Variável <select value={climate} onChange={e=>setClimate(e.target.value as typeof climate)}>{Object.entries(climateLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label><label>Defasagem <select value={lag} onChange={e=>setLag(Number(e.target.value))}>{[0,1,2,3,4,6,8].map(n=><option key={n} value={n}>{n} semana(s)</option>)}</select></label></div><p>IoT: semanas encerradas com pelo menos 126 horas válidas. Última semana IoT: {iot[iot.length-1]?.semana??'indisponível'}. Períodos sem cobertura permanecem vazios.</p>{climateChart.some(r=>r.clima!==null)?<ResponsiveContainer width="100%" height={190}><LineChart data={climateChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={45}/><YAxis/><Tooltip labelFormatter={(label)=>String(label)+" · "+(climateChart.find(r=>r.semana===label)?.fonte??"")}/><Line name={climateLabels[climate]} dataKey="clima" stroke="#55b3e6" dot={true} connectNulls={false} isAnimationActive={false}/></LineChart></ResponsiveContainer>:<p>Sem medições válidas neste recorte. Selecione outro período ou fonte.</p>}</section>
-      <section className="card epi-chart"><h2>Teste retrospectivo · previsão t+5</h2><label>Modelo <select value={model} onChange={e=>setModel(e.target.value as typeof model)}>{models.map(m=><option key={m} value={m}>{m==='persistencia_t'?'Persistência':m}</option>)}</select></label><p>MAE semanal no recorte: {mae===null?'—':mae.toFixed(2)} notificações/semana · não é previsão futura em tempo real. {test.length===0?"Sem teste retrospectivo neste período.":""}</p>{test.length>0&&<ResponsiveContainer width="100%" height={240}><LineChart data={testChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana_alvo" minTickGap={45}/><YAxis/><Tooltip/><Legend/><Line name="Observado" dataKey="observado" stroke="#df7777" dot={false} isAnimationActive={false}/><Line name={model} dataKey="previsto" stroke={colors[models.indexOf(model)]} dot={false} isAnimationActive={false}/></LineChart></ResponsiveContainer>}</section>
+      <section className="card epi-chart"><h2>Teste retrospectivo · modelo anterior t+5</h2><label>Modelo <select value={model} onChange={e=>setModel(e.target.value as typeof model)}>{models.map(m=><option key={m} value={m}>{m==='persistencia_t'?'Persistência':m}</option>)}</select></label><p>MAE semanal no recorte: {mae===null?'—':mae.toFixed(2)} notificações/semana · não é previsão futura em tempo real. {test.length===0?"Sem teste retrospectivo neste período.":""}</p>{test.length>0&&<ResponsiveContainer width="100%" height={240}><LineChart data={testChart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana_alvo" minTickGap={45}/><YAxis/><Tooltip/><Legend/><Line name="Observado" dataKey="observado" stroke="#df7777" dot={false} isAnimationActive={false}/><Line name={model} dataKey="previsto" stroke={colors[models.indexOf(model)]} dot={false} isAnimationActive={false}/></LineChart></ResponsiveContainer>}</section>
     </>}
     <details className="card epi-management"><summary>Gerenciamento de dados e metodologia</summary>
       <p>Histórico agregado do servidor. Importação manual temporária.</p>
