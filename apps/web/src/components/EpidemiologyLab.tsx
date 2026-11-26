@@ -147,9 +147,22 @@ export function EpidemiologyLab({ stations }: { stations: Station[] }) {
       <div className="epi-live-label"><strong>E01 · clima atual</strong><small>{!reference?'Não encontrada':fresh?'Online · '+formatDate(reference.lastDataReceivedAt):'Sem leitura recente'}</small></div>
       <div className="epi-live-values">{[["Temperatura",formattedMeasure(fresh && validDht ? sensor?.temperatura : null,"°C")],["Umidade",formattedMeasure(fresh && validDht ? sensor?.umidade : null,"%")],["Vento",formattedMeasure(fresh && typeof sensor?.vel_vento === "number" && sensor.vel_vento >= 0 ? sensor.vel_vento : null,"km/h")],["MQ-135 · bruto",formattedMeasure(fresh ? sensor?.qual_ar : null,"índice")]].map(([label,value])=><article className="epi-live-value" key={label}><small>{label}</small><strong>{value}</strong></article>)}</div>
     </div>
+    <section className="card epi-chart">
+      <h2>Validação experimental · novo modelo t+4</h2>
+      <p>Treino 2019–2023 · alvos de 2024 · 249 amostras de treino e 52 de teste · resultados relatados do retreinamento com embargo temporal.</p>
+      <div className="epi-kpis">{[['R² Ridge','0,7390'],['MAE Ridge','177,30'],['RMSE Ridge','221,60'],['Meta R²','0,7500']].map(([label,value])=><article className="card" key={label}><small>{label}</small><strong>{value}</strong></article>)}</div>
+      <div style={{overflowX:'auto'}}><table><thead><tr><th>Modelo</th><th>R²</th><th>MAE</th><th>RMSE</th></tr></thead><tbody>{[
+        ['Ridge',0.739019,177.30,221.60],
+        ['Ensemble Ridge 70% / CatBoost 30%',0.735284,174.75,223.18],
+        ['Ridge com pesos',0.697707,185.14,238.49],
+        ['CatBoost',0.690590,166.00,241.28],
+        ['Persistência',0.187171,277.33,391.08]
+      ].map(([name,r2,mae,rmse])=><tr key={String(name)}><td>{name}</td><td>{fmtMetric(Number(r2),4)}</td><td>{fmtMetric(Number(mae))}</td><td>{fmtMetric(Number(rmse))}</td></tr>)}</tbody></table></div>
+      <details className="epi-method"><summary>Metodologia e limitações</summary><p>Alvo: variação logarítmica em quatro semanas; dez atributos epidemiológicos e climáticos. Ridge alpha=100. Métricas relatadas na análise experimental anterior, não recalculadas pela interface. A definição do alvo e o calendário semanal ainda precisam ser harmonizados com o SINAN deste painel. O recorte global não altera esta avaliação fixa. Não representa desempenho prospectivo nem validação independente.</p></details>
+    </section>
     <section className="card epi-chart"><h2>Projeção municipal · cinco horizontes</h2>
       {!forecast ? <p>Execute o motor no servidor e atualize os dados.</p> : <>
-      <p>Origem: {forecast.origem} · {forecast.modo==='epi'?'SINAN + sazonalidade (sem IoT na inferência)':'Clima híbrido + SINAN'} · Experimental · Não constitui alerta operacional.</p>
+      <p>Motor da projeção: {forecast.modelo} · Origem: {forecast.origem} · {forecast.modo==='epi'?'SINAN + sazonalidade (sem IoT na inferência)':'Clima híbrido + SINAN'} · Experimental · Não constitui alerta operacional.</p>
       <details className="epi-method"><summary>Limitações e faixa de incerteza</summary><p>Semanas passadas sem observação são estimativas retrospectivas, não previsões novas. Faixa: percentil 90 dos erros absolutos no teste, sem garantia de cobertura.</p></details>
       <ResponsiveContainer width="100%" height={300}><ComposedChart data={forecastChart} margin={{top:22,right:16,left:0,bottom:0}}>
         <CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="semana" minTickGap={22} tickFormatter={(v:string)=>v.slice(8,10)+'/'+v.slice(5,7)}/><YAxis domain={[0,'auto']}/><Tooltip/><Legend/>
